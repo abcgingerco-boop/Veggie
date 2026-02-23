@@ -9,7 +9,7 @@ interface AddBuyerModalProps {
 }
 
 export function AddBuyerModal({ onClose }: AddBuyerModalProps) {
-  const { addBuyer } = useStore();
+  const { addBuyer, buyers } = useStore();
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -23,6 +23,12 @@ export function AddBuyerModal({ onClose }: AddBuyerModalProps) {
     if (!validation.success) {
       const firstError = Object.values(validation.errors)[0];
       setError(firstError);
+      return;
+    }
+
+    // Check for duplicate buyer name
+    if (buyers.some(b => b.name.toLowerCase().trim() === validation.data.name.toLowerCase().trim())) {
+      setError('A buyer with this name already exists.');
       return;
     }
 

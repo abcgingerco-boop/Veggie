@@ -36,6 +36,8 @@ interface AppState {
   updateBagWeight: (bagId: string, weight: number, grade: string) => Promise<void>;
   deleteBagWeight: (bagId: string) => Promise<void>;
 
+  resetDay: (date: string) => Promise<void>;
+
   // Pure client-side
   getInventory: (date: string) => GradeInventory[];
 }
@@ -79,7 +81,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     if (error) {
       console.error('Error fetching grades:', error);
-      return;
+      throw new Error('Failed to load grades. Please check your connection.');
     }
     set({ grades: (data || []).map(mapGrade) });
   },
@@ -94,7 +96,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     if (error) {
       console.error('Error fetching buyers:', error);
-      return;
+      throw new Error('Failed to load buyers. Please check your connection.');
     }
     set({ buyers: (data || []).map(mapBuyer) });
   },
@@ -109,7 +111,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     if (error) {
       console.error('Error fetching vehicles:', error);
-      return;
+      throw new Error('Failed to load vehicles. Please check your connection.');
     }
     set({ vehicles: (data || []).map(mapVehicle) });
   },
@@ -124,7 +126,7 @@ export const useStore = create<AppState>((set, get) => ({
 
     if (error) {
       console.error('Error fetching bag weights:', error);
-      return;
+      throw new Error('Failed to load bag weights. Please check your connection.');
     }
     set({ bagWeights: (data || []).map(mapBagWeight) });
   },
@@ -147,7 +149,14 @@ export const useStore = create<AppState>((set, get) => ({
 
   addVehicle: async (vehicle) => {
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    let user = null;
+    try {
+      const { data: { user: fetchedUser } } = await supabase.auth.getUser();
+      user = fetchedUser;
+    } catch {
+      const { data: { session } } = await supabase.auth.getSession();
+      user = session?.user ?? null;
+    }
 
     const { data, error } = await supabase
       .from('vehicles')
@@ -264,7 +273,14 @@ export const useStore = create<AppState>((set, get) => ({
     }
 
     const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
+    let user = null;
+    try {
+      const { data: { user: fetchedUser } } = await supabase.auth.getUser();
+      user = fetchedUser;
+    } catch {
+      const { data: { session } } = await supabase.auth.getSession();
+      user = session?.user ?? null;
+    }
 
     // Query max bag_number from DB to avoid race conditions
     const { data: maxData } = await supabase
@@ -334,6 +350,47 @@ export const useStore = create<AppState>((set, get) => ({
 
     set((state) => ({
       bagWeights: state.bagWeights.filter((bag) => bag.id !== bagId),
+    }));
+  },
+
+  resetDay: async (date) => {
+    const supabase = createClient();
+
+    // Delete bag_weights for this date first (depends on vehicles/grades)
+    const { error: bwError } = await supabase
+      .from('bag_weights')
+      .delete()
+      .eq('date', date);
+    if (bwError) {
+      console.error('Error deleting bag weights:', bwError);
+      throw new Error('Failed to reset day: could not delete bag weights.');
+    }
+
+    // Delete vehicles for this date
+    const { error: vError } = await supabase
+      .from('vehicles')
+      .delete()
+      .eq('date', date);
+    if (vError) {
+      console.error('Error deleting vehicles:', vError);
+      throw new Error('Failed to reset day: could not delete vehicles.');
+    }
+
+    // Soft-delete grades for this date
+    const { error: gError } = await supabase
+      .from('grades')
+      .update({ is_active: false })
+      .eq('date', date);
+    if (gError) {
+      console.error('Error deleting grades:', gError);
+      throw new Error('Failed to reset day: could not delete grades.');
+    }
+
+    // Clear local state
+    set((state) => ({
+      bagWeights: state.bagWeights.filter((b) => b.date !== date),
+      vehicles: state.vehicles.filter((v) => v.date !== date),
+      grades: state.grades.filter((g) => g.date !== date),
     }));
   },
 

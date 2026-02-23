@@ -14,22 +14,34 @@ import type { DailyReportData } from '@/lib/types';
 export default function DashboardPage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = use(params);
   const router = useRouter();
-  const { vehicles, buyers, bagWeights, grades, fetchVehiclesForDate, fetchBagWeightsForDate, fetchBuyers, fetchGrades } = useStore();
+  const { vehicles, buyers, bagWeights, grades, fetchVehiclesForDate, fetchBagWeightsForDate, fetchBuyers, fetchGrades, getInventory, resetDay } = useStore();
 
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showBuyerModal, setShowBuyerModal] = useState(false);
   const [showGradesModal, setShowGradesModal] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [buyerSearch, setBuyerSearch] = useState('');
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true);
+    setFetchError('');
     Promise.all([
       fetchVehiclesForDate(date),
       fetchBagWeightsForDate(date),
       fetchBuyers(),
       fetchGrades(date),
-    ]).finally(() => setLoading(false));
-  }, [date, fetchVehiclesForDate, fetchBagWeightsForDate, fetchBuyers, fetchGrades]);
+    ])
+      .catch(() => setFetchError('Failed to load data. Please check your connection.'))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date]);
 
   const dateVehicles = vehicles.filter(v => v.date === date);
 
@@ -113,7 +125,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
       report += `\n`;
     }
 
-    const inventory = useStore.getState().getInventory(date);
+    const inventory = getInventory(date);
     report += `\nINVENTORY SUMMARY\n`;
     report += `${'─'.repeat(30)}\n`;
     inventory.forEach(inv => {
@@ -141,7 +153,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
   };
 
   const handlePDFReport = async () => {
-    const inventory = useStore.getState().getInventory(date);
+    const inventory = getInventory(date);
     const reportData: DailyReportData = {
       date,
       vehicles: dateVehicles,
@@ -155,6 +167,23 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
     };
     const doc = generateDailyReportPDF(reportData);
     await sharePDF(doc, `Daily-Report-${date}`);
+  };
+
+  const handlePrintReport = () => {
+    const inventory = getInventory(date);
+    const reportData: DailyReportData = {
+      date,
+      vehicles: dateVehicles,
+      buyerSummaries: buyerData
+        .filter((d: any) => d.grades.length > 0)
+        .map((d: any) => ({
+          buyer: d.buyer,
+          grades: d.grades,
+        })),
+      inventory,
+    };
+    const doc = generateDailyReportPDF(reportData, true);
+    window.open(doc.output('bloburl') as unknown as string, '_blank');
   };
 
   if (loading) {
@@ -171,6 +200,23 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
           <div className="bg-white rounded-lg shadow-md p-4 mb-4 animate-pulse">
             <div className="h-60 bg-gray-200 rounded"></div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-8 text-center max-w-sm">
+          <div className="text-5xl mb-4">&#9888;&#65039;</div>
+          <p className="text-lg font-semibold text-red-600 mb-2">{fetchError}</p>
+          <button
+            onClick={loadData}
+            className="mt-4 px-6 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-600 transition shadow-md"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -200,10 +246,22 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                 PDF
               </button>
               <button
+                onClick={handlePrintReport}
+                className="px-3 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white font-semibold rounded-lg hover:from-gray-600 hover:to-gray-700 transition transform hover:scale-105 shadow-md text-xs"
+              >
+                Print
+              </button>
+              <button
                 onClick={() => setShowGradesModal(true)}
                 className="px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-500 text-white font-semibold rounded-lg hover:from-amber-600 hover:to-orange-600 transition transform hover:scale-105 shadow-md text-xs"
               >
                 Grades
+              </button>
+              <button
+                onClick={() => setShowResetModal(true)}
+                className="px-3 py-2 bg-gradient-to-r from-red-600 to-red-700 text-white font-semibold rounded-lg hover:from-red-700 hover:to-red-800 transition transform hover:scale-105 shadow-md text-xs"
+              >
+                Reset Day
               </button>
               <button
                 onClick={() => router.push('/calendar')}
@@ -332,7 +390,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                   <div className="space-y-2">
                     {grades.filter(g => g.isActive).map(grade => {
                       const gradeData = data.grades.find((g: any) => g.grade === grade.name);
-                      const inv = useStore.getState().getInventory(date);
+                      const inv = getInventory(date);
                       const gradeInv = inv.find(i => i.grade === grade.name);
                       const noStock = !gradeInv || gradeInv.pendingBags <= 0;
 
@@ -340,7 +398,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                         return (
                           <button
                             key={grade.id}
-                            onClick={() => router.push(`/buyer/${data.buyer.id}/${grade.name}?date=${date}`)}
+                            onClick={() => router.push(`/buyer/${data.buyer.id}/${encodeURIComponent(grade.name)}?date=${date}`)}
                             className="w-full p-2.5 rounded-lg text-left hover:scale-102 transition-all transform shadow-sm hover:shadow-md border"
                             style={{
                               backgroundColor: `${grade.color}08`,
@@ -383,7 +441,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                         return (
                           <button
                             key={grade.id}
-                            onClick={() => router.push(`/buyer/${data.buyer.id}/${grade.name}?date=${date}`)}
+                            onClick={() => router.push(`/buyer/${data.buyer.id}/${encodeURIComponent(grade.name)}?date=${date}`)}
                             className={`w-full p-2.5 rounded-lg text-left hover:scale-102 transition-all transform shadow-sm hover:shadow-md border ${noStock ? 'opacity-60' : ''}`}
                             style={{
                               backgroundColor: noStock ? '#f3f4f6' : `${grade.color}08`,
@@ -429,6 +487,44 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
       )}
       {showGradesModal && (
         <ManageGradesModal date={date} onClose={() => setShowGradesModal(false)} />
+      )}
+      {showResetModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h2 className="text-xl font-bold text-red-600 mb-3">Reset Day</h2>
+            <p className="text-sm text-gray-700 mb-4">
+              This will permanently delete <strong>ALL vehicles, bags, and grades</strong> for <strong>{formatDisplayDate(date)}</strong>. This action cannot be undone.
+            </p>
+            <p className="text-sm font-semibold text-red-600 mb-6">Are you sure you want to continue?</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowResetModal(false)}
+                disabled={resetting}
+                className="flex-1 px-4 py-2 border-2 border-gray-300 text-gray-700 font-semibold rounded-xl hover:bg-gray-50 transition disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!confirm('FINAL WARNING: All data for this date will be deleted permanently. Proceed?')) return;
+                  setResetting(true);
+                  try {
+                    await resetDay(date);
+                    setShowResetModal(false);
+                  } catch (err) {
+                    alert(err instanceof Error ? err.message : 'Failed to reset day.');
+                  } finally {
+                    setResetting(false);
+                  }
+                }}
+                disabled={resetting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white font-bold rounded-xl hover:bg-red-700 transition disabled:opacity-50"
+              >
+                {resetting ? 'Resetting...' : 'Yes, Reset'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

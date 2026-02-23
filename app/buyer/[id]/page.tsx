@@ -13,22 +13,31 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
   const date = searchParams.get('date') || '';
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [fetchError, setFetchError] = useState('');
 
-  const { buyers, bagWeights, grades, vehicles, fetchBuyers, fetchBagWeightsForDate, fetchGrades, fetchVehiclesForDate } = useStore();
+  const { buyers, bagWeights, grades, vehicles, fetchBuyers, fetchBagWeightsForDate, fetchGrades, fetchVehiclesForDate, getInventory } = useStore();
+
+  const loadData = () => {
+    setLoading(true);
+    setFetchError('');
+    Promise.all([
+      fetchBuyers(),
+      fetchGrades(date),
+      fetchBagWeightsForDate(date),
+      fetchVehiclesForDate(date),
+    ])
+      .catch(() => setFetchError('Failed to load data. Please check your connection.'))
+      .finally(() => setLoading(false));
+  };
 
   // Fallback fetch if store is empty (e.g., direct URL navigation)
   useEffect(() => {
     const needsFetch = buyers.length === 0 || grades.length === 0;
     if (needsFetch && date) {
-      setLoading(true);
-      Promise.all([
-        fetchBuyers(),
-        fetchGrades(date),
-        fetchBagWeightsForDate(date),
-        fetchVehiclesForDate(date),
-      ]).finally(() => setLoading(false));
+      loadData();
     }
-  }, [buyers.length, grades.length, date, fetchBuyers, fetchGrades, fetchBagWeightsForDate, fetchVehiclesForDate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buyers.length, grades.length, date]);
 
   const buyer = buyers.find(b => b.id === buyerId);
 
@@ -113,6 +122,20 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
     await sharePDF(doc, `${buyer.name}-Summary-${date}`);
   };
 
+  const handlePrint = () => {
+    if (!buyer || gradeStats.length === 0) {
+      alert('No bags entered yet for this buyer');
+      return;
+    }
+    const pdfData: BuyerSummaryData = {
+      buyer,
+      date,
+      grades: gradeStats,
+    };
+    const doc = generateBuyerSummaryPDF(pdfData, true);
+    window.open(doc.output('bloburl') as unknown as string, '_blank');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-8">
@@ -121,6 +144,23 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
             <div className="h-6 bg-gray-200 rounded w-48 mb-2"></div>
             <div className="h-4 bg-gray-200 rounded w-32"></div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-8 text-center max-w-sm">
+          <div className="text-5xl mb-4">&#9888;&#65039;</div>
+          <p className="text-lg font-semibold text-red-600 mb-2">{fetchError}</p>
+          <button
+            onClick={loadData}
+            className="mt-4 px-6 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-600 transition shadow-md"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -164,6 +204,12 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
                 PDF
               </button>
               <button
+                onClick={handlePrint}
+                className="px-3 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white font-semibold rounded-lg hover:from-gray-600 hover:to-gray-700 transition transform hover:scale-105 shadow-md text-xs"
+              >
+                Print
+              </button>
+              <button
                 onClick={() => router.push(`/dashboard/${date}`)}
                 className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-600 transition transform hover:scale-105 shadow-md text-xs"
               >
@@ -201,7 +247,7 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
                     </h2>
                   </div>
                   <button
-                    onClick={() => router.push(`/buyer/${buyerId}/${gradeStat.grade}?date=${date}`)}
+                    onClick={() => router.push(`/buyer/${buyerId}/${encodeURIComponent(gradeStat.grade)}?date=${date}`)}
                     className="px-3 py-1.5 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-600 transition text-xs"
                   >
                     View Details &rarr;
@@ -264,13 +310,13 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
             {grades.filter(g => g.isActive).map(grade => {
               const hasBags = gradeStats.some(gs => gs.grade === grade.name);
-              const inv = useStore.getState().getInventory(date);
+              const inv = getInventory(date);
               const gradeInv = inv.find(i => i.grade === grade.name);
               const noStock = !gradeInv || gradeInv.pendingBags <= 0;
               return (
                 <button
                   key={grade.id}
-                  onClick={() => router.push(`/buyer/${buyerId}/${grade.name}?date=${date}`)}
+                  onClick={() => router.push(`/buyer/${buyerId}/${encodeURIComponent(grade.name)}?date=${date}`)}
                   className={`p-3 rounded-lg text-left hover:scale-105 transition-all transform shadow-sm hover:shadow-md border ${noStock && !hasBags ? 'opacity-60' : ''}`}
                   style={{
                     backgroundColor: noStock && !hasBags ? '#f3f4f6' : `${grade.color}10`,

@@ -5,31 +5,43 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
 import { calculateGradeWiseStats } from '@/lib/calculations';
 import { generateBuyerSummaryPDF, sharePDF } from '@/lib/pdf';
+import { useOnlineStatus } from '@/components/OnlineStatus';
 import type { BuyerSummaryData } from '@/lib/types';
 
 export default function BuyerDetailPage({ params }: { params: Promise<{ id: string; grade: string }> }) {
-  const { id: buyerId, grade } = use(params);
+  const { id: buyerId, grade: rawGrade } = use(params);
+  const grade = decodeURIComponent(rawGrade);
   const searchParams = useSearchParams();
   const date = searchParams.get('date') || '';
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [fetchError, setFetchError] = useState('');
+  const isOnline = useOnlineStatus();
 
-  const { buyers, bagWeights, addBagWeight, deleteBagWeight, grades, vehicles, fetchBuyers, fetchGrades, fetchBagWeightsForDate, fetchVehiclesForDate } = useStore();
+  const { buyers, bagWeights, addBagWeight, deleteBagWeight, grades, vehicles, fetchBuyers, fetchGrades, fetchBagWeightsForDate, fetchVehiclesForDate, getInventory } = useStore();
+
+  const loadData = () => {
+    setLoading(true);
+    setFetchError('');
+    Promise.all([
+      fetchBuyers(),
+      fetchGrades(date),
+      fetchBagWeightsForDate(date),
+      fetchVehiclesForDate(date),
+    ])
+      .catch(() => setFetchError('Failed to load data. Please check your connection.'))
+      .finally(() => setLoading(false));
+  };
 
   // Fallback fetch if store is empty (e.g., direct URL navigation)
   useEffect(() => {
     const needsFetch = buyers.length === 0 || grades.length === 0;
     if (needsFetch && date) {
-      setLoading(true);
-      Promise.all([
-        fetchBuyers(),
-        fetchGrades(date),
-        fetchBagWeightsForDate(date),
-        fetchVehiclesForDate(date),
-      ]).finally(() => setLoading(false));
+      loadData();
     }
-  }, [buyers.length, grades.length, date, fetchBuyers, fetchGrades, fetchBagWeightsForDate, fetchVehiclesForDate]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buyers.length, grades.length, date]);
 
   const generateBuyerSummary = () => {
     const allBuyerBags = bagWeights.filter(
@@ -111,7 +123,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
   const stats = bags.length > 0 ? calculateGradeWiseStats(bags) : null;
 
   // Inventory check for this grade
-  const inventory = useStore.getState().getInventory(date);
+  const inventory = getInventory(date);
   const gradeInventory = inventory.find(inv => inv.grade === grade);
   const pendingBags = gradeInventory?.pendingBags ?? 0;
   const isOutOfStock = pendingBags <= 0;
@@ -137,12 +149,50 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
     await sharePDF(doc, `${buyer.name}-Grade${grade}-${date}`);
   };
 
+  const handlePrint = () => {
+    if (!buyer || !stats) {
+      alert('No bags entered yet');
+      return;
+    }
+    const pdfData: BuyerSummaryData = {
+      buyer,
+      date,
+      grades: [{
+        grade,
+        color: gradeColor,
+        bags,
+        totalBags: stats.totalBags,
+        grossWeight: stats.grossWeight,
+        netWeight: stats.netWeight,
+      }],
+    };
+    const doc = generateBuyerSummaryPDF(pdfData, true);
+    window.open(doc.output('bloburl') as unknown as string, '_blank');
+  };
+
   const WEIGHT_OPTIONS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65];
 
+  const WEIGHT_COLOR_MAP: Record<number, string> = {
+    50: '#ef4444', // Red
+    51: '#f97316', // Orange
+    52: '#f59e0b', // Amber
+    53: '#eab308', // Yellow
+    54: '#84cc16', // Lime
+    55: '#22c55e', // Green
+    56: '#10b981', // Emerald
+    57: '#14b8a6', // Teal
+    58: '#06b6d4', // Cyan
+    59: '#0ea5e9', // Sky
+    60: '#3b82f6', // Blue
+    61: '#6366f1', // Indigo
+    62: '#8b5cf6', // Violet
+    63: '#a855f7', // Purple
+    64: '#d946ef', // Fuchsia
+    65: '#ec4899', // Pink
+  };
+
   const getWeightColor = (weight: number) => {
-    if (weight < 55) return '#ef4444'; // Red - Light
-    if (weight < 60) return '#f59e0b'; // Amber - Medium
-    return '#10b981'; // Green - Heavy
+    return WEIGHT_COLOR_MAP[weight] || '#6b7280'; // Gray fallback
   };
 
   if (loading) {
@@ -153,6 +203,23 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
             <div className="h-6 bg-gray-200 rounded w-48 mb-2"></div>
             <div className="h-4 bg-gray-200 rounded w-32"></div>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (fetchError) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-8 text-center max-w-sm">
+          <div className="text-5xl mb-4">&#9888;&#65039;</div>
+          <p className="text-lg font-semibold text-red-600 mb-2">{fetchError}</p>
+          <button
+            onClick={loadData}
+            className="mt-4 px-6 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-600 transition shadow-md"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );
@@ -203,6 +270,12 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
                 PDF
               </button>
               <button
+                onClick={handlePrint}
+                className="px-3 py-2 bg-gradient-to-r from-gray-500 to-gray-600 text-white font-semibold rounded-lg hover:from-gray-600 hover:to-gray-700 transition transform hover:scale-105 shadow-md text-xs"
+              >
+                Print
+              </button>
+              <button
                 onClick={() => router.push(`/dashboard/${date}`)}
                 className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-600 transition transform hover:scale-105 shadow-md text-xs"
               >
@@ -244,7 +317,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
             {WEIGHT_OPTIONS.map(weight => (
               <button
                 key={weight}
-                disabled={submitting || isOutOfStock}
+                disabled={submitting || isOutOfStock || !isOnline}
                 onClick={async () => {
                   setSubmitting(true);
                   try {

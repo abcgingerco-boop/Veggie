@@ -10,18 +10,36 @@ function hexToRgb(hex: string): [number, number, number] | null {
   return [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)];
 }
 
-function addHeader(doc: jsPDF, title: string, subtitle: string) {
-  doc.setFillColor(...BRAND_COLOR);
-  doc.rect(0, 0, doc.internal.pageSize.getWidth(), 28, 'F');
+function addHeader(doc: jsPDF, title: string, subtitle: string, printFriendly = false) {
+  const pageWidth = doc.internal.pageSize.getWidth();
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text(title, 14, 12);
+  if (printFriendly) {
+    // Thin colored top line + colored text on white background
+    doc.setFillColor(...BRAND_COLOR);
+    doc.rect(0, 0, pageWidth, 3, 'F');
 
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(subtitle, 14, 20);
+    doc.setTextColor(...BRAND_COLOR);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, 14, 14);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    doc.text(subtitle, 14, 22);
+  } else {
+    doc.setFillColor(...BRAND_COLOR);
+    doc.rect(0, 0, pageWidth, 28, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, 14, 12);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(subtitle, 14, 20);
+  }
 
   doc.setTextColor(0, 0, 0);
 }
@@ -38,10 +56,22 @@ function addFooter(doc: jsPDF) {
   }
 }
 
-export function generateDailyReportPDF(data: DailyReportData): jsPDF {
+function getTableHeadStyles(printFriendly: boolean) {
+  if (printFriendly) {
+    return {
+      fillColor: [255, 255, 255] as [number, number, number],
+      textColor: BRAND_COLOR,
+      lineColor: BRAND_COLOR,
+      lineWidth: 0.5,
+    };
+  }
+  return { fillColor: BRAND_COLOR };
+}
+
+export function generateDailyReportPDF(data: DailyReportData, printFriendly = false): jsPDF {
   const doc = new jsPDF();
 
-  addHeader(doc, 'DAILY CONSOLIDATED REPORT', `Date: ${data.date}`);
+  addHeader(doc, 'DAILY CONSOLIDATED REPORT', `Date: ${data.date}`, printFriendly);
 
   let y = 36;
 
@@ -65,7 +95,7 @@ export function generateDailyReportPDF(data: DailyReportData): jsPDF {
       startY: y,
       head: [['Vehicle', 'Grade', 'Bags']],
       body: vehicleRows,
-      headStyles: { fillColor: BRAND_COLOR },
+      headStyles: getTableHeadStyles(printFriendly),
       margin: { left: 14, right: 14 },
     });
 
@@ -99,7 +129,7 @@ export function generateDailyReportPDF(data: DailyReportData): jsPDF {
       startY: y,
       head: [['Buyer', 'Grade', 'Bags', 'Gross', 'Net']],
       body: buyerRows,
-      headStyles: { fillColor: BRAND_COLOR },
+      headStyles: getTableHeadStyles(printFriendly),
       margin: { left: 14, right: 14 },
     });
 
@@ -130,7 +160,7 @@ export function generateDailyReportPDF(data: DailyReportData): jsPDF {
       startY: y,
       head: [['Grade', 'Total', 'Sold', 'Pending']],
       body: inventoryRows,
-      headStyles: { fillColor: BRAND_COLOR },
+      headStyles: getTableHeadStyles(printFriendly),
       margin: { left: 14, right: 14 },
     });
   }
@@ -139,14 +169,14 @@ export function generateDailyReportPDF(data: DailyReportData): jsPDF {
   return doc;
 }
 
-export function generateBuyerSummaryPDF(data: BuyerSummaryData): jsPDF {
+export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = false): jsPDF {
   const doc = new jsPDF();
 
   const subtitle = data.buyer.phone
     ? `${data.buyer.name} | Tel: ${data.buyer.phone} | Date: ${data.date}`
     : `${data.buyer.name} | Date: ${data.date}`;
 
-  addHeader(doc, 'BUYER SUMMARY', subtitle);
+  addHeader(doc, 'BUYER SUMMARY', subtitle, printFriendly);
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const marginLeft = 14;
@@ -192,12 +222,19 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData): jsPDF {
         const x = marginLeft + col * cellW;
         const cellY = y + row * cellH;
 
-        // Filled rounded rectangle
-        doc.setFillColor(...gradeColor);
-        doc.roundedRect(x, cellY, pillW, pillH, 2, 2, 'F');
+        if (printFriendly) {
+          // Outlined rectangle with colored text
+          doc.setDrawColor(...gradeColor);
+          doc.setLineWidth(0.5);
+          doc.roundedRect(x, cellY, pillW, pillH, 2, 2, 'S');
+          doc.setTextColor(...gradeColor);
+        } else {
+          // Filled rounded rectangle with white text
+          doc.setFillColor(...gradeColor);
+          doc.roundedRect(x, cellY, pillW, pillH, 2, 2, 'F');
+          doc.setTextColor(255, 255, 255);
+        }
 
-        // White weight text centered in pill
-        doc.setTextColor(255, 255, 255);
         const weightText = String(bag.weight);
         const textWidth = doc.getTextWidth(weightText);
         const textX = x + (pillW - textWidth) / 2;
@@ -251,7 +288,7 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData): jsPDF {
       startY: y,
       head: [['Grade', 'Bags', 'Gross Wt', 'Net Wt']],
       body: summaryRows,
-      headStyles: { fillColor: BRAND_COLOR, fontSize: 8 },
+      headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 8 },
       bodyStyles: { fontSize: 8 },
       margin: { left: marginLeft, right: marginRight },
       didParseCell: (hookData) => {
