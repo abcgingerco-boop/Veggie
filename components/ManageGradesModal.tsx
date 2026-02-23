@@ -22,11 +22,13 @@ const PRESET_COLORS = [
 ];
 
 export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
-  const { grades, addGrade } = useStore();
+  const { grades, addGrade, updateGrade, deleteGrade } = useStore();
   const [newGradeName, setNewGradeName] = useState('');
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editColor, setEditColor] = useState('');
 
   const handleAddGrade = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,23 +82,100 @@ export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
               {grades.filter(g => g.isActive).map(grade => (
                 <div
                   key={grade.id}
-                  className="p-4 rounded-xl border-3 flex items-center justify-between"
+                  className="p-4 rounded-xl border-3"
                   style={{
-                    borderColor: grade.color,
-                    backgroundColor: `${grade.color}15`
+                    borderColor: editingId === grade.id ? editColor : grade.color,
+                    backgroundColor: `${editingId === grade.id ? editColor : grade.color}15`
                   }}
                 >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg"
-                      style={{ backgroundColor: grade.color }}
-                    >
-                      {grade.name}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div
+                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                        style={{ backgroundColor: editingId === grade.id ? editColor : grade.color }}
+                      >
+                        {grade.name}
+                      </div>
+                      <span className="font-bold text-xl" style={{ color: editingId === grade.id ? editColor : grade.color }}>
+                        Grade {grade.name}
+                      </span>
                     </div>
-                    <span className="font-bold text-xl" style={{ color: grade.color }}>
-                      Grade {grade.name}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editingId === grade.id) {
+                            setEditingId(null);
+                          } else {
+                            setEditingId(grade.id);
+                            setEditColor(grade.color);
+                          }
+                        }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-gray-200 transition text-gray-500 hover:text-gray-700"
+                        title="Edit color"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (confirm(`Delete Grade ${grade.name}? It will be deactivated.`)) {
+                            try {
+                              await deleteGrade(grade.id);
+                            } catch {
+                              alert('Failed to delete grade.');
+                            }
+                          }
+                        }}
+                        className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-red-100 transition text-gray-400 hover:text-red-500"
+                        title="Delete grade"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
+
+                  {/* Inline color editor */}
+                  {editingId === grade.id && (
+                    <div className="mt-3 pt-3 border-t border-gray-200">
+                      <div className="grid grid-cols-5 gap-1.5 mb-3">
+                        {PRESET_COLORS.map(color => (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => setEditColor(color)}
+                            className={`w-full aspect-square rounded-lg transition-all transform ${
+                              editColor === color
+                                ? 'scale-110 ring-3 ring-offset-1'
+                                : 'hover:scale-105'
+                            }`}
+                            style={{
+                              backgroundColor: color,
+                              '--tw-ring-color': color
+                            } as React.CSSProperties}
+                          >
+                            {editColor === color && (
+                              <span className="text-white text-sm font-bold">✓</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await updateGrade(grade.id, editColor);
+                            setEditingId(null);
+                          } catch {
+                            alert('Failed to update color.');
+                          }
+                        }}
+                        className="w-full px-3 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-lg text-sm hover:from-indigo-700 hover:to-purple-700 transition"
+                      >
+                        Save Color
+                      </button>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>

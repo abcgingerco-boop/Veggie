@@ -15,7 +15,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const { buyers, bagWeights, addBagWeight, deleteBagWeight, grades, fetchBuyers, fetchGrades, fetchBagWeightsForDate } = useStore();
+  const { buyers, bagWeights, addBagWeight, deleteBagWeight, grades, vehicles, fetchBuyers, fetchGrades, fetchBagWeightsForDate, fetchVehiclesForDate } = useStore();
 
   // Fallback fetch if store is empty (e.g., direct URL navigation)
   useEffect(() => {
@@ -26,9 +26,10 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
         fetchBuyers(),
         fetchGrades(),
         fetchBagWeightsForDate(date),
+        fetchVehiclesForDate(date),
       ]).finally(() => setLoading(false));
     }
-  }, [buyers.length, grades.length, date, fetchBuyers, fetchGrades, fetchBagWeightsForDate]);
+  }, [buyers.length, grades.length, date, fetchBuyers, fetchGrades, fetchBagWeightsForDate, fetchVehiclesForDate]);
 
   const generateBuyerSummary = () => {
     const allBuyerBags = bagWeights.filter(
@@ -108,6 +109,12 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
   );
 
   const stats = bags.length > 0 ? calculateGradeWiseStats(bags) : null;
+
+  // Inventory check for this grade
+  const inventory = useStore.getState().getInventory(date);
+  const gradeInventory = inventory.find(inv => inv.grade === grade);
+  const pendingBags = gradeInventory?.pendingBags ?? 0;
+  const isOutOfStock = pendingBags <= 0;
 
   const handleBuyerPDF = async () => {
     if (!buyer || !stats) {
@@ -205,28 +212,54 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
           </div>
         </div>
 
+        {/* Inventory Status Bar */}
+        <div className={`rounded-lg shadow-md p-4 mb-4 ${isOutOfStock ? 'bg-red-50 border-2 border-red-300' : 'bg-green-50 border-2 border-green-300'}`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">{isOutOfStock ? '🚫' : '📦'}</span>
+              <span className={`font-bold text-sm ${isOutOfStock ? 'text-red-700' : 'text-green-700'}`}>
+                {isOutOfStock ? 'Out of Stock' : `Stock: ${pendingBags} bag${pendingBags !== 1 ? 's' : ''} remaining`}
+              </span>
+            </div>
+            {gradeInventory && (
+              <span className="text-xs text-gray-600">
+                {gradeInventory.soldBags}/{gradeInventory.totalBagsStart} sold
+              </span>
+            )}
+          </div>
+        </div>
+
         {/* Quick Weight Entry */}
         <div className="bg-white rounded-lg shadow-md p-4 mb-4">
           <h2 className="text-base font-bold mb-3 text-gray-800 flex items-center gap-2">
             <span className="text-lg">⚖️</span>
             QUICK WEIGHT ENTRY
           </h2>
+          {isOutOfStock && (
+            <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg text-center">
+              <p className="text-sm font-semibold text-red-600">No inventory available - cannot add bags</p>
+            </div>
+          )}
           <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5 md:gap-2">
             {WEIGHT_OPTIONS.map(weight => (
               <button
                 key={weight}
-                disabled={submitting}
+                disabled={submitting || isOutOfStock}
                 onClick={async () => {
                   setSubmitting(true);
                   try {
                     await addBagWeight(buyerId, grade, weight, date);
-                  } catch {
-                    alert('Failed to add bag. Please try again.');
+                  } catch (err) {
+                    alert(err instanceof Error ? err.message : 'Failed to add bag. Please try again.');
                   } finally {
                     setSubmitting(false);
                   }
                 }}
-                className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold text-base md:text-lg rounded-lg transform hover:scale-110 active:scale-95 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:transform-none"
+                className={`aspect-square font-bold text-base md:text-lg rounded-lg transform transition-all shadow-md disabled:opacity-50 disabled:transform-none ${
+                  isOutOfStock
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                    : 'bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white hover:scale-110 active:scale-95 hover:shadow-lg'
+                }`}
               >
                 {weight}
               </button>
@@ -277,7 +310,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
                         }
                       }
                     }}
-                    className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs shadow-md hover:bg-red-600"
+                    className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-bold text-xs shadow-md hover:bg-red-600"
                   >
                     ✕
                   </button>

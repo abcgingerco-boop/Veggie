@@ -14,7 +14,7 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  const { buyers, bagWeights, grades, fetchBuyers, fetchBagWeightsForDate, fetchGrades } = useStore();
+  const { buyers, bagWeights, grades, vehicles, fetchBuyers, fetchBagWeightsForDate, fetchGrades, fetchVehiclesForDate } = useStore();
 
   // Fallback fetch if store is empty (e.g., direct URL navigation)
   useEffect(() => {
@@ -25,9 +25,10 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
         fetchBuyers(),
         fetchGrades(),
         fetchBagWeightsForDate(date),
+        fetchVehiclesForDate(date),
       ]).finally(() => setLoading(false));
     }
-  }, [buyers.length, grades.length, date, fetchBuyers, fetchGrades, fetchBagWeightsForDate]);
+  }, [buyers.length, grades.length, date, fetchBuyers, fetchGrades, fetchBagWeightsForDate, fetchVehiclesForDate]);
 
   const buyer = buyers.find(b => b.id === buyerId);
 
@@ -263,29 +264,37 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
             {grades.filter(g => g.isActive).map(grade => {
               const hasBags = gradeStats.some(gs => gs.grade === grade.name);
+              const inv = useStore.getState().getInventory(date);
+              const gradeInv = inv.find(i => i.grade === grade.name);
+              const noStock = !gradeInv || gradeInv.pendingBags <= 0;
               return (
                 <button
                   key={grade.id}
                   onClick={() => router.push(`/buyer/${buyerId}/${grade.name}?date=${date}`)}
-                  className="p-3 rounded-lg text-left hover:scale-105 transition-all transform shadow-sm hover:shadow-md border"
+                  className={`p-3 rounded-lg text-left hover:scale-105 transition-all transform shadow-sm hover:shadow-md border ${noStock && !hasBags ? 'opacity-60' : ''}`}
                   style={{
-                    backgroundColor: `${grade.color}10`,
-                    borderColor: `${grade.color}40`
+                    backgroundColor: noStock && !hasBags ? '#f3f4f6' : `${grade.color}10`,
+                    borderColor: noStock && !hasBags ? '#d1d5db' : `${grade.color}40`
                   }}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-bold text-sm" style={{ color: grade.color }}>
+                    <span className="font-bold text-sm" style={{ color: noStock && !hasBags ? '#9ca3af' : grade.color }}>
                       Grade {grade.name}
                     </span>
                     <div
                       className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs"
-                      style={{ backgroundColor: grade.color }}
+                      style={{ backgroundColor: noStock && !hasBags ? '#9ca3af' : grade.color }}
                     >
                       {grade.name}
                     </div>
                   </div>
-                  <div className="text-xs text-gray-600 mt-1">
-                    {hasBags ? 'View/Add more' : 'Click to add'}
+                  <div className="flex items-center justify-between mt-1">
+                    <span className="text-xs text-gray-600">
+                      {hasBags ? 'View/Add more' : 'Click to add'}
+                    </span>
+                    {noStock && (
+                      <span className="text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">No Stock</span>
+                    )}
                   </div>
                 </button>
               );

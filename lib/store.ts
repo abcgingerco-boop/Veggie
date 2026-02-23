@@ -30,6 +30,8 @@ interface AppState {
   addVehicle: (vehicle: Omit<Vehicle, 'id'>) => Promise<void>;
   addBuyer: (buyer: Omit<Buyer, 'id'>) => Promise<void>;
   addGrade: (gradeName: string, color: string) => Promise<void>;
+  updateGrade: (gradeId: string, color: string) => Promise<void>;
+  deleteGrade: (gradeId: string) => Promise<void>;
   addBagWeight: (buyerId: string, grade: string, weight: number, date?: string) => Promise<void>;
   updateBagWeight: (bagId: string, weight: number, grade: string) => Promise<void>;
   deleteBagWeight: (bagId: string) => Promise<void>;
@@ -212,9 +214,53 @@ export const useStore = create<AppState>((set, get) => ({
     }));
   },
 
+  updateGrade: async (gradeId, color) => {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('grades')
+      .update({ color })
+      .eq('id', gradeId);
+
+    if (error) {
+      console.error('Error updating grade:', error);
+      throw error;
+    }
+
+    set((state) => ({
+      grades: state.grades.map((g) =>
+        g.id === gradeId ? { ...g, color } : g
+      ),
+    }));
+  },
+
+  deleteGrade: async (gradeId) => {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('grades')
+      .update({ is_active: false })
+      .eq('id', gradeId);
+
+    if (error) {
+      console.error('Error deleting grade:', error);
+      throw error;
+    }
+
+    set((state) => ({
+      grades: state.grades.filter((g) => g.id !== gradeId),
+    }));
+  },
+
   addBagWeight: async (buyerId, grade, weight, date) => {
     const state = get();
     const effectiveDate = date || state.selectedDate;
+
+    // Inventory validation: block if no pending bags for this grade
+    const inventory = get().getInventory(effectiveDate);
+    const gradeInv = inventory.find((inv) => inv.grade === grade);
+    if (!gradeInv || gradeInv.pendingBags <= 0) {
+      throw new Error('No inventory available for this grade');
+    }
+
     const supabase = createClient();
     const { data: { user } } = await supabase.auth.getUser();
 
@@ -312,9 +358,11 @@ export const useStore = create<AppState>((set, get) => ({
         grade: grade.name,
         totalBagsStart: totalBagsPerGrade[grade.name] || 0,
         soldBags: soldBagsPerGrade[grade.name] || 0,
-        pendingBags:
+        pendingBags: Math.max(
+          0,
           (totalBagsPerGrade[grade.name] || 0) -
-          (soldBagsPerGrade[grade.name] || 0),
+          (soldBagsPerGrade[grade.name] || 0)
+        ),
         color: grade.color,
       }));
   },

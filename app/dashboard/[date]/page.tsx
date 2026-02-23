@@ -332,6 +332,9 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                   <div className="space-y-2">
                     {grades.filter(g => g.isActive).map(grade => {
                       const gradeData = data.grades.find((g: any) => g.grade === grade.name);
+                      const inv = useStore.getState().getInventory(date);
+                      const gradeInv = inv.find(i => i.grade === grade.name);
+                      const noStock = !gradeInv || gradeInv.pendingBags <= 0;
 
                       if (gradeData) {
                         return (
@@ -348,11 +351,16 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                               <span className="font-bold text-sm" style={{ color: grade.color }}>
                                 Grade {grade.name}
                               </span>
-                              <div
-                                className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs"
-                                style={{ backgroundColor: grade.color }}
-                              >
-                                {grade.name}
+                              <div className="flex items-center gap-1.5">
+                                {noStock && (
+                                  <span className="text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">No Stock</span>
+                                )}
+                                <div
+                                  className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                                  style={{ backgroundColor: grade.color }}
+                                >
+                                  {grade.name}
+                                </div>
                               </div>
                             </div>
                             <div className="grid grid-cols-3 gap-1 text-xs">
@@ -376,21 +384,25 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                           <button
                             key={grade.id}
                             onClick={() => router.push(`/buyer/${data.buyer.id}/${grade.name}?date=${date}`)}
-                            className="w-full p-2.5 rounded-lg text-left hover:scale-102 transition-all transform shadow-sm hover:shadow-md border"
+                            className={`w-full p-2.5 rounded-lg text-left hover:scale-102 transition-all transform shadow-sm hover:shadow-md border ${noStock ? 'opacity-60' : ''}`}
                             style={{
-                              backgroundColor: `${grade.color}08`,
-                              borderColor: `${grade.color}40`
+                              backgroundColor: noStock ? '#f3f4f6' : `${grade.color}08`,
+                              borderColor: noStock ? '#d1d5db' : `${grade.color}40`
                             }}
                           >
                             <div className="flex items-center justify-between">
-                              <span className="font-semibold text-sm" style={{ color: grade.color }}>
+                              <span className="font-semibold text-sm" style={{ color: noStock ? '#9ca3af' : grade.color }}>
                                 Grade {grade.name}
                               </span>
                               <div className="flex items-center gap-2">
-                                <span className="text-xs text-gray-500">Click to add bags</span>
+                                {noStock ? (
+                                  <span className="text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">No Stock</span>
+                                ) : (
+                                  <span className="text-xs text-gray-500">Click to add bags</span>
+                                )}
                                 <div
                                   className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs"
-                                  style={{ backgroundColor: grade.color }}
+                                  style={{ backgroundColor: noStock ? '#9ca3af' : grade.color }}
                                 >
                                   {grade.name}
                                 </div>

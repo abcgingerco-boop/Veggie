@@ -51,13 +51,24 @@ export function LiveInventory({ date }: LiveInventoryProps) {
                 </div>
               </div>
 
-              <div className="bg-white rounded-lg p-2.5 shadow-sm border" style={{ borderColor: inv.color }}>
+              <div
+                className="bg-white rounded-lg p-2.5 shadow-sm border"
+                style={{ borderColor: inv.pendingBags === 0 && inv.soldBags > inv.totalBagsStart ? '#ef4444' : inv.color }}
+              >
                 <div className="flex justify-between items-center">
                   <span className="text-xs font-bold text-gray-700">Pending:</span>
-                  <span className="font-bold text-xl" style={{ color: inv.color }}>
+                  <span
+                    className="font-bold text-xl"
+                    style={{ color: inv.pendingBags === 0 && inv.soldBags > inv.totalBagsStart ? '#ef4444' : inv.color }}
+                  >
                     {inv.pendingBags}
                   </span>
                 </div>
+                {inv.soldBags > inv.totalBagsStart && (
+                  <div className="text-xs font-semibold text-red-500 mt-1">
+                    Oversold by {inv.soldBags - inv.totalBagsStart}
+                  </div>
+                )}
               </div>
             </div>
           </div>
