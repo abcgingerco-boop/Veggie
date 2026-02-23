@@ -5,6 +5,7 @@ export interface Grade {
   name: string;
   color: string; // For visual distinction
   isActive: boolean;
+  date: string; // Grades are per-day
 }
 
 export interface Vehicle {

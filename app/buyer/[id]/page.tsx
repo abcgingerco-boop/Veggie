@@ -23,7 +23,7 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
       setLoading(true);
       Promise.all([
         fetchBuyers(),
-        fetchGrades(),
+        fetchGrades(date),
         fetchBagWeightsForDate(date),
         fetchVehiclesForDate(date),
       ]).finally(() => setLoading(false));

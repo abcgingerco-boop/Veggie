@@ -27,7 +27,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
       fetchVehiclesForDate(date),
       fetchBagWeightsForDate(date),
       fetchBuyers(),
-      fetchGrades(),
+      fetchGrades(date),
     ]).finally(() => setLoading(false));
   }, [date, fetchVehiclesForDate, fetchBagWeightsForDate, fetchBuyers, fetchGrades]);
 
@@ -428,7 +428,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
         <AddBuyerModal onClose={() => setShowBuyerModal(false)} />
       )}
       {showGradesModal && (
-        <ManageGradesModal onClose={() => setShowGradesModal(false)} />
+        <ManageGradesModal date={date} onClose={() => setShowGradesModal(false)} />
       )}
     </div>
   );

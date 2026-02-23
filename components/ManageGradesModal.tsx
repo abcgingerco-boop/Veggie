@@ -5,6 +5,7 @@ import { useStore } from '@/lib/store';
 import { gradeFormSchema, validateForm } from '@/lib/validation';
 
 interface ManageGradesModalProps {
+  date: string;
   onClose: () => void;
 }
 
@@ -21,7 +22,7 @@ const PRESET_COLORS = [
   '#a855f7', // Violet
 ];
 
-export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
+export function ManageGradesModal({ date, onClose }: ManageGradesModalProps) {
   const { grades, addGrade, updateGrade, deleteGrade } = useStore();
   const [newGradeName, setNewGradeName] = useState('');
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
@@ -49,7 +50,7 @@ export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
 
     setSubmitting(true);
     try {
-      await addGrade(validation.data.name, validation.data.color);
+      await addGrade(validation.data.name, validation.data.color, date);
       setNewGradeName('');
       setSelectedColor(PRESET_COLORS[0]);
     } catch {

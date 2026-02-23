@@ -20,7 +20,7 @@ interface AppState {
   setSelectedDate: (date: string) => void;
 
   // Fetch methods
-  fetchGrades: () => Promise<void>;
+  fetchGrades: (date: string) => Promise<void>;
   fetchBuyers: () => Promise<void>;
   fetchVehiclesForDate: (date: string) => Promise<void>;
   fetchBagWeightsForDate: (date: string) => Promise<void>;
@@ -29,7 +29,7 @@ interface AppState {
   // Mutations (async, Supabase-backed)
   addVehicle: (vehicle: Omit<Vehicle, 'id'>) => Promise<void>;
   addBuyer: (buyer: Omit<Buyer, 'id'>) => Promise<void>;
-  addGrade: (gradeName: string, color: string) => Promise<void>;
+  addGrade: (gradeName: string, color: string, date: string) => Promise<void>;
   updateGrade: (gradeId: string, color: string) => Promise<void>;
   deleteGrade: (gradeId: string) => Promise<void>;
   addBagWeight: (buyerId: string, grade: string, weight: number, date?: string) => Promise<void>;
@@ -68,12 +68,13 @@ export const useStore = create<AppState>((set, get) => ({
 
   // --- Fetch methods ---
 
-  fetchGrades: async () => {
+  fetchGrades: async (date) => {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('grades')
       .select('*')
       .eq('is_active', true)
+      .eq('date', date)
       .order('created_at', { ascending: true });
 
     if (error) {
@@ -192,13 +193,14 @@ export const useStore = create<AppState>((set, get) => ({
     }));
   },
 
-  addGrade: async (gradeName, color) => {
+  addGrade: async (gradeName, color, date) => {
     const supabase = createClient();
     const { data, error } = await supabase
       .from('grades')
       .insert({
         name: gradeName,
         color,
+        date,
         is_active: true,
       })
       .select()

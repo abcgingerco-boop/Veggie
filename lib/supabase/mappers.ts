@@ -24,6 +24,7 @@ export function mapGrade(row: any): Grade {
     name: row.name,
     color: row.color,
     isActive: row.is_active,
+    date: row.date || '',
   }
 }
 

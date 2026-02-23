@@ -24,7 +24,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
       setLoading(true);
       Promise.all([
         fetchBuyers(),
-        fetchGrades(),
+        fetchGrades(date),
         fetchBagWeightsForDate(date),
         fetchVehiclesForDate(date),
       ]).finally(() => setLoading(false));
