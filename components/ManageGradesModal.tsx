@@ -58,9 +58,9 @@ export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-2 md:p-4 z-50">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="p-6">
+        <div className="p-4 md:p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
               🏷️ Manage Grades
@@ -76,7 +76,7 @@ export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
           {/* Current Grades */}
           <div className="mb-8">
             <h3 className="text-lg font-semibold text-gray-700 mb-4">Active Grades</h3>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 md:gap-4">
               {grades.filter(g => g.isActive).map(grade => (
                 <div
                   key={grade.id}
@@ -126,7 +126,7 @@ export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
                 <label className="block text-sm font-semibold text-gray-700 mb-3">
                   Select Color *
                 </label>
-                <div className="grid grid-cols-5 gap-3">
+                <div className="grid grid-cols-5 gap-2 md:gap-3">
                   {PRESET_COLORS.map(color => (
                     <button
                       key={color}

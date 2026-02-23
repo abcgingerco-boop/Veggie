@@ -182,24 +182,24 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
                 )}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={generateBuyerSummary}
-                className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-lg hover:from-green-600 hover:to-emerald-600 transition transform hover:scale-105 shadow-md text-xs"
+                className="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-lg hover:from-green-600 hover:to-emerald-600 transition transform hover:scale-105 shadow-md text-xs"
               >
-                📤 Share
+                Share
               </button>
               <button
                 onClick={handleBuyerPDF}
-                className="px-4 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold rounded-lg hover:from-red-600 hover:to-pink-600 transition transform hover:scale-105 shadow-md text-xs"
+                className="px-3 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold rounded-lg hover:from-red-600 hover:to-pink-600 transition transform hover:scale-105 shadow-md text-xs"
               >
                 PDF
               </button>
               <button
                 onClick={() => router.push(`/dashboard/${date}`)}
-                className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-600 transition transform hover:scale-105 shadow-md text-xs"
+                className="px-3 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-semibold rounded-lg hover:from-indigo-600 hover:to-purple-600 transition transform hover:scale-105 shadow-md text-xs"
               >
-                ← Back
+                &larr; Back
               </button>
             </div>
           </div>
@@ -211,7 +211,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
             <span className="text-lg">⚖️</span>
             QUICK WEIGHT ENTRY
           </h2>
-          <div className="grid grid-cols-4 md:grid-cols-8 gap-2">
+          <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5 md:gap-2">
             {WEIGHT_OPTIONS.map(weight => (
               <button
                 key={weight}
@@ -226,7 +226,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
                     setSubmitting(false);
                   }
                 }}
-                className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold text-lg rounded-lg transform hover:scale-110 active:scale-95 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:transform-none"
+                className="aspect-square bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-bold text-base md:text-lg rounded-lg transform hover:scale-110 active:scale-95 transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:transform-none"
               >
                 {weight}
               </button>

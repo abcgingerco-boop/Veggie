@@ -186,7 +186,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
               <h1 className="text-xl font-bold text-gray-900">{formatDisplayDate(date)}</h1>
               <p className="text-sm text-gray-600 mt-0.5">Daily Trading Dashboard</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
                 onClick={generateDailyReport}
                 className="px-3 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-lg hover:from-green-600 hover:to-emerald-600 transition transform hover:scale-105 shadow-md text-xs"
