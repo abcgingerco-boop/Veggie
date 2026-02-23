@@ -4,6 +4,12 @@ import type { DailyReportData, BuyerSummaryData } from './types';
 
 const BRAND_COLOR: [number, number, number] = [79, 70, 229]; // indigo-500
 
+function hexToRgb(hex: string): [number, number, number] | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return null;
+  return [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)];
+}
+
 function addHeader(doc: jsPDF, title: string, subtitle: string) {
   doc.setFillColor(...BRAND_COLOR);
   doc.rect(0, 0, doc.internal.pageSize.getWidth(), 28, 'F');
@@ -142,45 +148,118 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData): jsPDF {
 
   addHeader(doc, 'BUYER SUMMARY', subtitle);
 
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const marginLeft = 14;
+  const marginRight = 14;
+  const usableWidth = pageWidth - marginLeft - marginRight;
+
+  // Adaptive sizing based on total bag count
+  const totalBags = data.grades.reduce((sum, g) => sum + g.bags.length, 0);
+  const isCompact = totalBags > 100;
+  const pillW = isCompact ? 11 : 14;
+  const pillH = isCompact ? 10 : 14;
+  const pillGap = isCompact ? 2 : 3;
+  const pillFontSize = isCompact ? 6.5 : 8;
+  const cellW = pillW + pillGap;
+  const cellH = pillH + pillGap;
+  const pillsPerRow = Math.floor(usableWidth / cellW);
+
   let y = 36;
 
   if (data.grades.length === 0) {
     doc.setFontSize(12);
-    doc.text('No bags entered yet', 14, y);
+    doc.text('No bags entered yet', marginLeft, y);
   } else {
     for (const gradeStat of data.grades) {
-      doc.setFontSize(12);
+      const gradeColor = hexToRgb(gradeStat.color) || BRAND_COLOR;
+
+      // Grade heading with colored bullet
+      doc.setFillColor(...gradeColor);
+      doc.circle(marginLeft + 2, y - 1.5, 1.5, 'F');
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(0, 0, 0);
-      doc.text(`Grade ${gradeStat.grade}`, 14, y);
-      y += 4;
+      doc.setTextColor(...gradeColor);
+      doc.text(`Grade ${gradeStat.grade}`, marginLeft + 6, y);
+      y += 5;
 
-      const bagRows = gradeStat.bags.map((bag) => [
-        `#${bag.bagNumber}`,
-        `${bag.weight} kg`,
-      ]);
+      // Draw bag weight pills in a grid
+      doc.setFontSize(pillFontSize);
+      doc.setFont('helvetica', 'bold');
 
-      bagRows.push(['Total Bags', String(gradeStat.totalBags)]);
-      bagRows.push(['Gross Weight', `${gradeStat.grossWeight} kg`]);
-      bagRows.push(['Net Weight', `${gradeStat.netWeight} kg`]);
+      gradeStat.bags.forEach((bag, i) => {
+        const col = i % pillsPerRow;
+        const row = Math.floor(i / pillsPerRow);
+        const x = marginLeft + col * cellW;
+        const cellY = y + row * cellH;
 
-      autoTable(doc, {
-        startY: y,
-        head: [['Bag', 'Weight']],
-        body: bagRows,
-        headStyles: { fillColor: BRAND_COLOR },
-        margin: { left: 14, right: 14 },
-        didParseCell: (data) => {
-          // Bold the summary rows
-          const rowCount = bagRows.length;
-          if (data.section === 'body' && data.row.index >= rowCount - 3) {
-            data.cell.styles.fontStyle = 'bold';
-          }
-        },
+        // Filled rounded rectangle
+        doc.setFillColor(...gradeColor);
+        doc.roundedRect(x, cellY, pillW, pillH, 2, 2, 'F');
+
+        // White weight text centered in pill
+        doc.setTextColor(255, 255, 255);
+        const weightText = String(bag.weight);
+        const textWidth = doc.getTextWidth(weightText);
+        const textX = x + (pillW - textWidth) / 2;
+        const textY = cellY + pillH / 2 + pillFontSize * 0.12;
+        doc.text(weightText, textX, textY);
       });
 
-      y = (doc as any).lastAutoTable.finalY + 10;
+      // Move past the pills grid
+      const totalRows = Math.ceil(gradeStat.bags.length / pillsPerRow) || 1;
+      y += totalRows * cellH + 2;
+
+      // Grade summary line
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(80, 80, 80);
+      doc.text(
+        `Bags: ${gradeStat.totalBags}  |  Gross: ${gradeStat.grossWeight} kg  |  Net: ${gradeStat.netWeight} kg`,
+        marginLeft,
+        y
+      );
+      y += 8;
     }
+
+    // Overall Summary divider
+    doc.setDrawColor(180, 180, 180);
+    doc.setLineWidth(0.3);
+    doc.line(marginLeft + 20, y - 2, pageWidth - marginRight - 20, y - 2);
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    const summaryTitle = 'OVERALL SUMMARY';
+    const titleWidth = doc.getTextWidth(summaryTitle);
+    doc.text(summaryTitle, (pageWidth - titleWidth) / 2, y + 2);
+    y += 8;
+
+    // Summary table
+    const summaryRows = data.grades.map((g) => [
+      `Grade ${g.grade}`,
+      String(g.totalBags),
+      `${g.grossWeight} kg`,
+      `${g.netWeight} kg`,
+    ]);
+
+    const totalBagsCount = data.grades.reduce((s, g) => s + g.totalBags, 0);
+    const totalGross = data.grades.reduce((s, g) => s + g.grossWeight, 0);
+    const totalNet = data.grades.reduce((s, g) => s + g.netWeight, 0);
+    summaryRows.push(['TOTAL', String(totalBagsCount), `${totalGross} kg`, `${totalNet} kg`]);
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Grade', 'Bags', 'Gross Wt', 'Net Wt']],
+      body: summaryRows,
+      headStyles: { fillColor: BRAND_COLOR, fontSize: 8 },
+      bodyStyles: { fontSize: 8 },
+      margin: { left: marginLeft, right: marginRight },
+      didParseCell: (hookData) => {
+        if (hookData.section === 'body' && hookData.row.index === summaryRows.length - 1) {
+          hookData.cell.styles.fontStyle = 'bold';
+        }
+      },
+    });
   }
 
   addFooter(doc);

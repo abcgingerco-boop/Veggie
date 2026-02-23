@@ -30,7 +30,6 @@ interface AppState {
   addVehicle: (vehicle: Omit<Vehicle, 'id'>) => Promise<void>;
   addBuyer: (buyer: Omit<Buyer, 'id'>) => Promise<void>;
   addGrade: (gradeName: string, color: string) => Promise<void>;
-  deleteGrade: (gradeId: string) => Promise<void>;
   addBagWeight: (buyerId: string, grade: string, weight: number, date?: string) => Promise<void>;
   updateBagWeight: (bagId: string, weight: number, grade: string) => Promise<void>;
   deleteBagWeight: (bagId: string) => Promise<void>;
@@ -210,23 +209,6 @@ export const useStore = create<AppState>((set, get) => ({
 
     set((state) => ({
       grades: [...state.grades, mapGrade(data)],
-    }));
-  },
-
-  deleteGrade: async (gradeId) => {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from('grades')
-      .delete()
-      .eq('id', gradeId);
-
-    if (error) {
-      console.error('Error deleting grade:', error);
-      throw error;
-    }
-
-    set((state) => ({
-      grades: state.grades.filter((g) => g.id !== gradeId),
     }));
   },
 

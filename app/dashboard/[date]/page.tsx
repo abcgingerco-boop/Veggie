@@ -19,6 +19,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showBuyerModal, setShowBuyerModal] = useState(false);
   const [showGradesModal, setShowGradesModal] = useState(false);
+  const [buyerSearch, setBuyerSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,7 +33,15 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
 
   const dateVehicles = vehicles.filter(v => v.date === date);
 
-  const buyerData = buyers.filter(b => b.isActive).map(buyer => {
+  const searchTerm = buyerSearch.toLowerCase().trim();
+  const filteredBuyers = buyers.filter(b => {
+    if (!b.isActive) return false;
+    if (!searchTerm) return true;
+    return b.name.toLowerCase().includes(searchTerm) ||
+      (b.phone && b.phone.toLowerCase().includes(searchTerm));
+  });
+
+  const buyerData = filteredBuyers.map(buyer => {
     const buyerBags = bagWeights.filter(
       b => b.buyerId === buyer.id && b.date === date
     );
@@ -271,17 +280,26 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
 
         {/* Buyers Section - Grade Wise */}
         <div className="bg-white rounded-lg shadow-md p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-bold text-gray-800 flex items-center gap-2">
-              <span className="text-lg">👥</span>
-              BUYERS - GRADE WISE
-            </h2>
-            <button
-              onClick={() => setShowBuyerModal(true)}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-indigo-600 transition transform hover:scale-105 shadow-md text-xs"
-            >
-              + Add Buyer
-            </button>
+          <div className="flex flex-col gap-3 mb-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-800 flex items-center gap-2">
+                <span className="text-lg">👥</span>
+                BUYERS - GRADE WISE
+              </h2>
+              <button
+                onClick={() => setShowBuyerModal(true)}
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-indigo-600 transition transform hover:scale-105 shadow-md text-xs"
+              >
+                + Add Buyer
+              </button>
+            </div>
+            <input
+              type="text"
+              value={buyerSearch}
+              onChange={(e) => setBuyerSearch(e.target.value)}
+              placeholder="Search buyers by name or phone..."
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition outline-none text-sm text-black placeholder:text-gray-400"
+            />
           </div>
 
           {buyerData.length === 0 ? (

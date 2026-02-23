@@ -79,7 +79,7 @@ export function AddVehicleModal({ date, onClose }: AddVehicleModalProps) {
                 value={vehicleNumber}
                 onChange={(e) => setVehicleNumber(e.target.value)}
                 placeholder="e.g., MH-01-1234"
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition outline-none text-lg font-semibold uppercase"
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition outline-none text-lg font-semibold uppercase text-black placeholder:text-gray-400"
                 required
               />
             </div>
@@ -116,7 +116,7 @@ export function AddVehicleModal({ date, onClose }: AddVehicleModalProps) {
                       value={gradeWiseBags[grade.name] || ''}
                       onChange={(e) => updateGradeBags(grade.name, e.target.value)}
                       placeholder="0"
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:border-transparent transition outline-none text-center text-2xl font-bold"
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:border-transparent transition outline-none text-center text-2xl font-bold text-black placeholder:text-gray-400"
                       style={{
                         '--tw-ring-color': grade.color
                       } as React.CSSProperties}

@@ -22,7 +22,7 @@ const PRESET_COLORS = [
 ];
 
 export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
-  const { grades, addGrade, deleteGrade } = useStore();
+  const { grades, addGrade } = useStore();
   const [newGradeName, setNewGradeName] = useState('');
   const [selectedColor, setSelectedColor] = useState(PRESET_COLORS[0]);
   const [submitting, setSubmitting] = useState(false);
@@ -54,19 +54,6 @@ export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
       setError('Failed to add grade. Please try again.');
     } finally {
       setSubmitting(false);
-    }
-  };
-
-  const handleDeleteGrade = async (gradeId: string) => {
-    const grade = grades.find(g => g.id === gradeId);
-    if (!grade) return;
-
-    if (confirm(`Delete Grade ${grade.name}? This cannot be undone.`)) {
-      try {
-        await deleteGrade(gradeId);
-      } catch {
-        alert('Failed to delete grade. Please try again.');
-      }
     }
   };
 
@@ -110,12 +97,6 @@ export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
                       Grade {grade.name}
                     </span>
                   </div>
-                  <button
-                    onClick={() => handleDeleteGrade(grade.id)}
-                    className="text-red-500 hover:text-red-700 font-bold text-xl"
-                  >
-                    ✕
-                  </button>
                 </div>
               ))}
             </div>
@@ -136,7 +117,7 @@ export function ManageGradesModal({ onClose }: ManageGradesModalProps) {
                   onChange={(e) => setNewGradeName(e.target.value)}
                   placeholder="e.g., D, Premium, Super"
                   maxLength={10}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition outline-none text-lg font-semibold uppercase"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition outline-none text-lg font-semibold uppercase text-black placeholder:text-gray-400"
                 />
               </div>
 
