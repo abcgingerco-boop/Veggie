@@ -9,7 +9,8 @@ import { AddBuyerModal } from '@/components/AddBuyerModal';
 import { ManageGradesModal } from '@/components/ManageGradesModal';
 import { formatDisplayDate, calculateGradeWiseStats } from '@/lib/calculations';
 import { generateDailyReportPDF, sharePDF } from '@/lib/pdf';
-import type { DailyReportData } from '@/lib/types';
+import { generateDailyReportImage, shareReportImage } from '@/lib/report-image';
+import type { DailyReportData, Vehicle, Buyer } from '@/lib/types';
 
 export default function DashboardPage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = use(params);
@@ -24,6 +25,8 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
   const [buyerSearch, setBuyerSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
+  const [editingVehicle, setEditingVehicle] = useState<Vehicle | undefined>(undefined);
+  const [editingBuyer, setEditingBuyer] = useState<Buyer | undefined>(undefined);
 
   const loadData = () => {
     setLoading(true);
@@ -31,7 +34,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
     Promise.all([
       fetchVehiclesForDate(date),
       fetchBagWeightsForDate(date),
-      fetchBuyers(),
+      fetchBuyers(date),
       fetchGrades(date),
     ])
       .catch(() => setFetchError('Failed to load data. Please check your connection.'))
@@ -111,11 +114,14 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
         if (data.grades.length === 0) {
           report += `   No purchases yet\n`;
         } else {
-          data.grades.forEach((gradeData: any) => {
+          const sortedGrades = [...data.grades].sort((a: any, b: any) => a.grade.localeCompare(b.grade));
+          sortedGrades.forEach((gradeData: any) => {
             report += `   Grade ${gradeData.grade}:\n`;
             report += `      Bags: ${gradeData.totalBags}\n`;
             report += `      Gross: ${gradeData.grossWeight} kg\n`;
             report += `      Net: ${gradeData.netWeight} kg\n`;
+            report += `      Rate:\n`;
+            report += `      Amount:\n`;
             gradeData.bags.forEach((bag: any) => {
               report += `         Bag #${bag.bagNumber}: ${bag.weight} kg\n`;
             });
@@ -152,7 +158,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
     }
   };
 
-  const handlePDFReport = async () => {
+  const handleImageReport = async () => {
     const inventory = getInventory(date);
     const reportData: DailyReportData = {
       date,
@@ -165,8 +171,13 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
         })),
       inventory,
     };
-    const doc = generateDailyReportPDF(reportData);
-    await sharePDF(doc, `Daily-Report-${date}`);
+    try {
+      const blob = await generateDailyReportImage(reportData);
+      await shareReportImage(blob, `Daily-Report-${date}`);
+    } catch (err) {
+      console.error('Error generating image report:', err);
+      alert('Failed to generate image report. Please try again.');
+    }
   };
 
   const handlePrintReport = () => {
@@ -240,10 +251,10 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                 Report
               </button>
               <button
-                onClick={handlePDFReport}
+                onClick={handleImageReport}
                 className="px-3 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold rounded-lg hover:from-red-600 hover:to-pink-600 transition transform hover:scale-105 shadow-md text-xs"
               >
-                PDF
+                Image
               </button>
               <button
                 onClick={handlePrintReport}
@@ -284,7 +295,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
               VEHICLES - GRADE WISE
             </h2>
             <button
-              onClick={() => setShowVehicleModal(true)}
+              onClick={() => { setEditingVehicle(undefined); setShowVehicleModal(true); }}
               className="px-4 py-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-lg hover:from-green-600 hover:to-emerald-600 transition transform hover:scale-105 shadow-md text-xs"
             >
               + Add Vehicle
@@ -304,8 +315,15 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                   key={vehicle.id}
                   className="bg-white rounded-lg p-4 border border-gray-300 hover:shadow-md transition shadow-sm"
                 >
-                  <div className="text-base font-bold text-gray-900 mb-3 pb-2 border-b border-gray-200">
-                    {vehicle.vehicleNumber}
+                  <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+                    <span className="text-base font-bold text-gray-900">{vehicle.vehicleNumber}</span>
+                    <button
+                      onClick={() => { setEditingVehicle(vehicle); setShowVehicleModal(true); }}
+                      className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                      title="Edit vehicle"
+                    >
+                      ✏️
+                    </button>
                   </div>
                   <div className="space-y-2">
                     {Object.entries(vehicle.gradeWiseBags).map(([grade, count]) => {
@@ -345,7 +363,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                 BUYERS - GRADE WISE
               </h2>
               <button
-                onClick={() => setShowBuyerModal(true)}
+                onClick={() => { setEditingBuyer(undefined); setShowBuyerModal(true); }}
                 className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white font-semibold rounded-lg hover:from-blue-600 hover:to-indigo-600 transition transform hover:scale-105 shadow-md text-xs"
               >
                 + Add Buyer
@@ -372,11 +390,20 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                 <div key={data.buyer.id} className="bg-white border border-gray-300 rounded-lg p-4 hover:shadow-md transition shadow-sm">
                   <div className="mb-3 pb-3 border-b border-gray-200">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <div className="text-base font-bold text-gray-900">{data.buyer.name}</div>
-                        {data.buyer.phone && (
-                          <div className="text-xs text-gray-600 mt-0.5">Tel: {data.buyer.phone}</div>
-                        )}
+                      <div className="flex items-center gap-2">
+                        <div>
+                          <div className="text-base font-bold text-gray-900">{data.buyer.name}</div>
+                          {data.buyer.phone && (
+                            <div className="text-xs text-gray-600 mt-0.5">Tel: {data.buyer.phone}</div>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => { setEditingBuyer(data.buyer); setShowBuyerModal(true); }}
+                          className="p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                          title="Edit buyer"
+                        >
+                          ✏️
+                        </button>
                       </div>
                       <button
                         onClick={() => router.push(`/buyer/${data.buyer.id}?date=${date}`)}
@@ -480,10 +507,18 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
 
       {/* Modals */}
       {showVehicleModal && (
-        <AddVehicleModal date={date} onClose={() => setShowVehicleModal(false)} />
+        <AddVehicleModal
+          date={date}
+          onClose={() => { setShowVehicleModal(false); setEditingVehicle(undefined); }}
+          vehicle={editingVehicle}
+        />
       )}
       {showBuyerModal && (
-        <AddBuyerModal onClose={() => setShowBuyerModal(false)} />
+        <AddBuyerModal
+          date={date}
+          onClose={() => { setShowBuyerModal(false); setEditingBuyer(undefined); }}
+          buyer={editingBuyer}
+        />
       )}
       {showGradesModal && (
         <ManageGradesModal date={date} onClose={() => setShowGradesModal(false)} />

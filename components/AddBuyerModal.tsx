@@ -3,15 +3,19 @@
 import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { buyerFormSchema, validateForm } from '@/lib/validation';
+import type { Buyer } from '@/lib/types';
 
 interface AddBuyerModalProps {
   onClose: () => void;
+  date: string;
+  buyer?: Buyer;
 }
 
-export function AddBuyerModal({ onClose }: AddBuyerModalProps) {
-  const { addBuyer, buyers } = useStore();
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
+export function AddBuyerModal({ onClose, date, buyer }: AddBuyerModalProps) {
+  const { addBuyer, updateBuyer, buyers } = useStore();
+  const isEditing = !!buyer;
+  const [name, setName] = useState(buyer?.name || '');
+  const [phone, setPhone] = useState(buyer?.phone || '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,22 +30,34 @@ export function AddBuyerModal({ onClose }: AddBuyerModalProps) {
       return;
     }
 
-    // Check for duplicate buyer name
-    if (buyers.some(b => b.name.toLowerCase().trim() === validation.data.name.toLowerCase().trim())) {
+    // Check for duplicate buyer name (exclude current buyer when editing)
+    const duplicate = buyers.some(b => {
+      if (isEditing && b.id === buyer.id) return false;
+      return b.name.toLowerCase().trim() === validation.data.name.toLowerCase().trim();
+    });
+    if (duplicate) {
       setError('A buyer with this name already exists.');
       return;
     }
 
     setSubmitting(true);
     try {
-      await addBuyer({
-        name: validation.data.name,
-        phone: validation.data.phone,
-        isActive: true
-      });
+      if (isEditing) {
+        await updateBuyer(buyer.id, {
+          name: validation.data.name,
+          phone: validation.data.phone,
+        });
+      } else {
+        await addBuyer({
+          name: validation.data.name,
+          phone: validation.data.phone,
+          isActive: true,
+          date,
+        });
+      }
       onClose();
     } catch {
-      setError('Failed to add buyer. Please try again.');
+      setError(isEditing ? 'Failed to update buyer. Please try again.' : 'Failed to add buyer. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -53,7 +69,7 @@ export function AddBuyerModal({ onClose }: AddBuyerModalProps) {
         <div className="p-4 md:p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-              👤 Add Buyer
+              {isEditing ? '✏️ Edit Buyer' : '👤 Add Buyer'}
             </h2>
             <button
               onClick={onClose}
@@ -114,7 +130,9 @@ export function AddBuyerModal({ onClose }: AddBuyerModalProps) {
                 disabled={submitting}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl hover:from-indigo-700 hover:to-purple-700 transform hover:scale-105 transition shadow-lg disabled:opacity-50 disabled:transform-none"
               >
-                {submitting ? 'Adding...' : 'Add Buyer'}
+                {submitting
+                  ? (isEditing ? 'Saving...' : 'Adding...')
+                  : (isEditing ? 'Save Changes' : 'Add Buyer')}
               </button>
             </div>
           </form>

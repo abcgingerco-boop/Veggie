@@ -42,13 +42,8 @@ export function formatDate(date: Date): string {
 }
 
 export function formatDisplayDate(dateString: string): string {
-  const [year, month, day] = dateString.split('-').map(Number);
-  const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  });
+  const [year, month, day] = dateString.split('-');
+  return `${day}-${month}-${year}`;
 }
 
 // Check if date is in allowed range (past 3 months, not future)

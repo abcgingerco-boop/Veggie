@@ -3,8 +3,9 @@
 import { use, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
-import { calculateGradeWiseStats } from '@/lib/calculations';
+import { calculateGradeWiseStats, formatDisplayDate } from '@/lib/calculations';
 import { generateBuyerSummaryPDF, sharePDF } from '@/lib/pdf';
+import { generateBuyerReportImage, shareReportImage } from '@/lib/report-image';
 import type { BuyerSummaryData } from '@/lib/types';
 
 export default function BuyerOverviewPage({ params }: { params: Promise<{ id: string }> }) {
@@ -21,7 +22,7 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
     setLoading(true);
     setFetchError('');
     Promise.all([
-      fetchBuyers(),
+      fetchBuyers(date),
       fetchGrades(date),
       fetchBagWeightsForDate(date),
       fetchVehiclesForDate(date),
@@ -76,7 +77,7 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
     summary += `==================\n`;
     summary += `Name: ${buyer?.name}\n`;
     if (buyer?.phone) summary += `Phone: ${buyer.phone}\n`;
-    summary += `Date: ${date}\n`;
+    summary += `Date: ${formatDisplayDate(date)}\n`;
     summary += `==================\n\n`;
 
     gradeStats.forEach(stat => {
@@ -136,6 +137,25 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
     window.open(doc.output('bloburl') as unknown as string, '_blank');
   };
 
+  const handleImageReport = async () => {
+    if (!buyer || gradeStats.length === 0) {
+      alert('No bags entered yet for this buyer');
+      return;
+    }
+    const imageData: BuyerSummaryData = {
+      buyer,
+      date,
+      grades: gradeStats,
+    };
+    try {
+      const blob = await generateBuyerReportImage(imageData);
+      await shareReportImage(blob, `${buyer.name}-Summary-${date}`);
+    } catch (err) {
+      console.error('Error generating image report:', err);
+      alert('Failed to generate image report. Please try again.');
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 pb-8">
@@ -188,7 +208,7 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
               {buyer.phone && (
                 <div className="text-xs text-gray-600 mt-1">Tel: {buyer.phone}</div>
               )}
-              <div className="text-xs text-gray-500 mt-0.5">{date}</div>
+              <div className="text-xs text-gray-500 mt-0.5">{formatDisplayDate(date)}</div>
             </div>
             <div className="flex flex-wrap gap-2">
               <button
@@ -198,10 +218,10 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
                 Share
               </button>
               <button
-                onClick={handleBuyerPDF}
+                onClick={handleImageReport}
                 className="px-3 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold rounded-lg hover:from-red-600 hover:to-pink-600 transition transform hover:scale-105 shadow-md text-xs"
               >
-                PDF
+                Image
               </button>
               <button
                 onClick={handlePrint}

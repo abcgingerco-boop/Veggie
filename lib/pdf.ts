@@ -1,6 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { DailyReportData, BuyerSummaryData } from './types';
+import { formatDisplayDate } from './calculations';
 
 const BRAND_COLOR: [number, number, number] = [79, 70, 229]; // indigo-500
 
@@ -71,7 +72,7 @@ function getTableHeadStyles(printFriendly: boolean) {
 export function generateDailyReportPDF(data: DailyReportData, printFriendly = false): jsPDF {
   const doc = new jsPDF();
 
-  addHeader(doc, 'DAILY CONSOLIDATED REPORT', `Date: ${data.date}`, printFriendly);
+  addHeader(doc, 'DAILY CONSOLIDATED REPORT', `Date: ${formatDisplayDate(data.date)}`, printFriendly);
 
   let y = 36;
 
@@ -115,19 +116,22 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
   y += 4;
 
   if (data.buyerSummaries.length > 0) {
-    const buyerRows = data.buyerSummaries.flatMap((bs) =>
-      bs.grades.map((g) => [
+    const buyerRows = data.buyerSummaries.flatMap((bs) => {
+      const sortedGrades = [...bs.grades].sort((a, b) => a.grade.localeCompare(b.grade));
+      return sortedGrades.map((g) => [
         bs.buyer.name,
         `Grade ${g.grade}`,
         String(g.totalBags),
         `${g.grossWeight} kg`,
         `${g.netWeight} kg`,
-      ])
-    );
+        '',
+        '',
+      ]);
+    });
 
     autoTable(doc, {
       startY: y,
-      head: [['Buyer', 'Grade', 'Bags', 'Gross', 'Net']],
+      head: [['Buyer', 'Grade', 'Bags', 'Gross', 'Net', 'Rate', 'Amount']],
       body: buyerRows,
       headStyles: getTableHeadStyles(printFriendly),
       margin: { left: 14, right: 14 },
@@ -173,8 +177,8 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
   const doc = new jsPDF();
 
   const subtitle = data.buyer.phone
-    ? `${data.buyer.name} | Tel: ${data.buyer.phone} | Date: ${data.date}`
-    : `${data.buyer.name} | Date: ${data.date}`;
+    ? `${data.buyer.name} | Tel: ${data.buyer.phone} | Date: ${formatDisplayDate(data.date)}`
+    : `${data.buyer.name} | Date: ${formatDisplayDate(data.date)}`;
 
   addHeader(doc, 'BUYER SUMMARY', subtitle, printFriendly);
 

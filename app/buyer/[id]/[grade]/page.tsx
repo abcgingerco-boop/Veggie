@@ -3,8 +3,9 @@
 import { use, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
-import { calculateGradeWiseStats } from '@/lib/calculations';
+import { calculateGradeWiseStats, formatDisplayDate } from '@/lib/calculations';
 import { generateBuyerSummaryPDF, sharePDF } from '@/lib/pdf';
+import { generateBuyerReportImage, shareReportImage } from '@/lib/report-image';
 import { useOnlineStatus } from '@/components/OnlineStatus';
 import type { BuyerSummaryData } from '@/lib/types';
 
@@ -25,7 +26,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
     setLoading(true);
     setFetchError('');
     Promise.all([
-      fetchBuyers(),
+      fetchBuyers(date),
       fetchGrades(date),
       fetchBagWeightsForDate(date),
       fetchVehiclesForDate(date),
@@ -77,7 +78,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
     summary += `━━━━━━━━━━━━━━━━━━\n`;
     summary += `👤 Name: ${buyer?.name}\n`;
     if (buyer?.phone) summary += `📞 Phone: ${buyer.phone}\n`;
-    summary += `📅 Date: ${date}\n`;
+    summary += `📅 Date: ${formatDisplayDate(date)}\n`;
     summary += `━━━━━━━━━━━━━━━━━━\n\n`;
 
     gradeStats.forEach(stat => {
@@ -168,6 +169,32 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
     };
     const doc = generateBuyerSummaryPDF(pdfData, true);
     window.open(doc.output('bloburl') as unknown as string, '_blank');
+  };
+
+  const handleImageReport = async () => {
+    if (!buyer || !stats) {
+      alert('No bags entered yet');
+      return;
+    }
+    const imageData: BuyerSummaryData = {
+      buyer,
+      date,
+      grades: [{
+        grade,
+        color: gradeColor,
+        bags,
+        totalBags: stats.totalBags,
+        grossWeight: stats.grossWeight,
+        netWeight: stats.netWeight,
+      }],
+    };
+    try {
+      const blob = await generateBuyerReportImage(imageData);
+      await shareReportImage(blob, `${buyer.name}-Grade${grade}-${date}`);
+    } catch (err) {
+      console.error('Error generating image report:', err);
+      alert('Failed to generate image report. Please try again.');
+    }
   };
 
   const WEIGHT_OPTIONS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65];
@@ -264,10 +291,10 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
                 Share
               </button>
               <button
-                onClick={handleBuyerPDF}
+                onClick={handleImageReport}
                 className="px-3 py-2 bg-gradient-to-r from-red-500 to-pink-500 text-white font-semibold rounded-lg hover:from-red-600 hover:to-pink-600 transition transform hover:scale-105 shadow-md text-xs"
               >
-                PDF
+                Image
               </button>
               <button
                 onClick={handlePrint}
@@ -331,8 +358,9 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
                 className={`aspect-square font-bold text-base md:text-lg rounded-lg transform transition-all shadow-md disabled:opacity-50 disabled:transform-none ${
                   isOutOfStock
                     ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    : 'bg-gradient-to-br from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white hover:scale-110 active:scale-95 hover:shadow-lg'
+                    : 'text-white hover:scale-110 active:scale-95 hover:shadow-lg'
                 }`}
+                style={!isOutOfStock ? { backgroundColor: WEIGHT_COLOR_MAP[weight] } : undefined}
               >
                 {weight}
               </button>

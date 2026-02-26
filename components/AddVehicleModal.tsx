@@ -3,16 +3,21 @@
 import { useState } from 'react';
 import { useStore } from '@/lib/store';
 import { vehicleFormSchema, validateForm } from '@/lib/validation';
+import type { Vehicle } from '@/lib/types';
 
 interface AddVehicleModalProps {
   date: string;
   onClose: () => void;
+  vehicle?: Vehicle;
 }
 
-export function AddVehicleModal({ date, onClose }: AddVehicleModalProps) {
-  const { grades, addVehicle } = useStore();
-  const [vehicleNumber, setVehicleNumber] = useState('');
-  const [gradeWiseBags, setGradeWiseBags] = useState<Record<string, number>>({});
+export function AddVehicleModal({ date, onClose, vehicle }: AddVehicleModalProps) {
+  const { grades, addVehicle, updateVehicle } = useStore();
+  const isEditing = !!vehicle;
+  const [vehicleNumber, setVehicleNumber] = useState(vehicle?.vehicleNumber || '');
+  const [gradeWiseBags, setGradeWiseBags] = useState<Record<string, number>>(
+    vehicle?.gradeWiseBags || {}
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
@@ -29,14 +34,21 @@ export function AddVehicleModal({ date, onClose }: AddVehicleModalProps) {
 
     setSubmitting(true);
     try {
-      await addVehicle({
-        date,
-        vehicleNumber: validation.data.vehicleNumber,
-        gradeWiseBags: validation.data.gradeWiseBags,
-      });
+      if (isEditing) {
+        await updateVehicle(vehicle.id, {
+          vehicleNumber: validation.data.vehicleNumber,
+          gradeWiseBags: validation.data.gradeWiseBags,
+        });
+      } else {
+        await addVehicle({
+          date,
+          vehicleNumber: validation.data.vehicleNumber,
+          gradeWiseBags: validation.data.gradeWiseBags,
+        });
+      }
       onClose();
     } catch {
-      setError('Failed to add vehicle. Please try again.');
+      setError(isEditing ? 'Failed to update vehicle. Please try again.' : 'Failed to add vehicle. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -58,7 +70,7 @@ export function AddVehicleModal({ date, onClose }: AddVehicleModalProps) {
         <div className="p-4 md:p-6">
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
-              🚛 Add Vehicle
+              {isEditing ? '✏️ Edit Vehicle' : '🚛 Add Vehicle'}
             </h2>
             <button
               onClick={onClose}
@@ -158,7 +170,9 @@ export function AddVehicleModal({ date, onClose }: AddVehicleModalProps) {
                 disabled={submitting}
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-bold rounded-xl hover:from-indigo-700 hover:to-purple-700 transform hover:scale-105 transition shadow-lg disabled:opacity-50 disabled:transform-none"
               >
-                {submitting ? 'Adding...' : 'Add Vehicle'}
+                {submitting
+                  ? (isEditing ? 'Saving...' : 'Adding...')
+                  : (isEditing ? 'Save Changes' : 'Add Vehicle')}
               </button>
             </div>
           </form>

@@ -21,14 +21,16 @@ interface AppState {
 
   // Fetch methods
   fetchGrades: (date: string) => Promise<void>;
-  fetchBuyers: () => Promise<void>;
+  fetchBuyers: (date: string) => Promise<void>;
   fetchVehiclesForDate: (date: string) => Promise<void>;
   fetchBagWeightsForDate: (date: string) => Promise<void>;
   fetchDatesWithData: () => Promise<void>;
 
   // Mutations (async, Supabase-backed)
   addVehicle: (vehicle: Omit<Vehicle, 'id'>) => Promise<void>;
+  updateVehicle: (vehicleId: string, data: { vehicleNumber: string; gradeWiseBags: Record<string, number> }) => Promise<void>;
   addBuyer: (buyer: Omit<Buyer, 'id'>) => Promise<void>;
+  updateBuyer: (buyerId: string, data: { name?: string; phone?: string }) => Promise<void>;
   addGrade: (gradeName: string, color: string, date: string) => Promise<void>;
   updateGrade: (gradeId: string, color: string) => Promise<void>;
   deleteGrade: (gradeId: string) => Promise<void>;
@@ -86,18 +88,45 @@ export const useStore = create<AppState>((set, get) => ({
     set({ grades: (data || []).map(mapGrade) });
   },
 
-  fetchBuyers: async () => {
+  fetchBuyers: async (date) => {
     const supabase = createClient();
-    const { data, error } = await supabase
+    // Try fetching with date filter first (per-date buyers model)
+    let { data, error } = await supabase
       .from('buyers')
       .select('*')
       .eq('is_active', true)
+      .eq('date', date)
       .order('created_at', { ascending: true });
 
     if (error) {
-      console.error('Error fetching buyers:', error);
-      throw new Error('Failed to load buyers. Please check your connection.');
+      // Fallback: date column may not exist yet (migration not run)
+      const result = await supabase
+        .from('buyers')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: true });
+      data = result.data;
+      if (result.error) {
+        console.error('Error fetching buyers:', result.error);
+        throw new Error('Failed to load buyers. Please check your connection.');
+      }
     }
+
+    // Also fetch legacy buyers (date IS NULL) so existing data still shows
+    if (!error) {
+      const { data: legacyData } = await supabase
+        .from('buyers')
+        .select('*')
+        .eq('is_active', true)
+        .is('date', null)
+        .order('created_at', { ascending: true });
+      if (legacyData && legacyData.length > 0) {
+        const existingIds = new Set((data || []).map((b: any) => b.id));
+        const newLegacy = legacyData.filter((b: any) => !existingIds.has(b.id));
+        data = [...(data || []), ...newLegacy];
+      }
+    }
+
     set({ buyers: (data || []).map(mapBuyer) });
   },
 
@@ -180,17 +209,56 @@ export const useStore = create<AppState>((set, get) => ({
     }));
   },
 
+  updateVehicle: async (vehicleId, data) => {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('vehicles')
+      .update({
+        vehicle_number: data.vehicleNumber,
+        grade_wise_bags: data.gradeWiseBags,
+      })
+      .eq('id', vehicleId);
+
+    if (error) {
+      console.error('Error updating vehicle:', error);
+      throw error;
+    }
+
+    set((state) => ({
+      vehicles: state.vehicles.map((v) =>
+        v.id === vehicleId
+          ? { ...v, vehicleNumber: data.vehicleNumber, gradeWiseBags: data.gradeWiseBags }
+          : v
+      ),
+    }));
+  },
+
   addBuyer: async (buyer) => {
     const supabase = createClient();
-    const { data, error } = await supabase
+    const insertData: Record<string, unknown> = {
+      name: buyer.name,
+      phone: buyer.phone || null,
+      is_active: true,
+    };
+    if (buyer.date) insertData.date = buyer.date;
+
+    let { data, error } = await supabase
       .from('buyers')
-      .insert({
-        name: buyer.name,
-        phone: buyer.phone || null,
-        is_active: true,
-      })
+      .insert(insertData)
       .select()
       .single();
+
+    // Fallback: if date column doesn't exist yet, retry without it
+    if (error && buyer.date) {
+      const { date: _, ...withoutDate } = insertData;
+      const result = await supabase
+        .from('buyers')
+        .insert(withoutDate)
+        .select()
+        .single();
+      data = result.data;
+      error = result.error;
+    }
 
     if (error) {
       console.error('Error adding buyer:', error);
@@ -199,6 +267,29 @@ export const useStore = create<AppState>((set, get) => ({
 
     set((state) => ({
       buyers: [...state.buyers, mapBuyer(data)],
+    }));
+  },
+
+  updateBuyer: async (buyerId, data) => {
+    const supabase = createClient();
+    const updateData: Record<string, string> = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.phone !== undefined) updateData.phone = data.phone;
+
+    const { error } = await supabase
+      .from('buyers')
+      .update(updateData)
+      .eq('id', buyerId);
+
+    if (error) {
+      console.error('Error updating buyer:', error);
+      throw error;
+    }
+
+    set((state) => ({
+      buyers: state.buyers.map((b) =>
+        b.id === buyerId ? { ...b, ...data } : b
+      ),
     }));
   },
 
@@ -386,11 +477,22 @@ export const useStore = create<AppState>((set, get) => ({
       throw new Error('Failed to reset day: could not delete grades.');
     }
 
+    // Soft-delete buyers for this date
+    const { error: buyerError } = await supabase
+      .from('buyers')
+      .update({ is_active: false })
+      .eq('date', date);
+    if (buyerError) {
+      console.error('Error deleting buyers:', buyerError);
+      throw new Error('Failed to reset day: could not delete buyers.');
+    }
+
     // Clear local state
     set((state) => ({
       bagWeights: state.bagWeights.filter((b) => b.date !== date),
       vehicles: state.vehicles.filter((v) => v.date !== date),
       grades: state.grades.filter((g) => g.date !== date),
+      buyers: state.buyers.filter((b) => b.date !== date),
     }));
   },
 

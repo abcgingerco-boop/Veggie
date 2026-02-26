@@ -15,6 +15,7 @@ export function mapBuyer(row: any): Buyer {
     name: row.name,
     phone: row.phone || undefined,
     isActive: row.is_active,
+    date: row.date || '',
   }
 }
 

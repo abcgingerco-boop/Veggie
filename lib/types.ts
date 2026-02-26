@@ -24,6 +24,7 @@ export interface Buyer {
   name: string;
   phone?: string;
   isActive: boolean;
+  date: string;
 }
 
 export interface BagWeight {
