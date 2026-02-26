@@ -31,6 +31,7 @@ interface AppState {
   updateVehicle: (vehicleId: string, data: { vehicleNumber: string; gradeWiseBags: Record<string, number> }) => Promise<void>;
   addBuyer: (buyer: Omit<Buyer, 'id'>) => Promise<void>;
   updateBuyer: (buyerId: string, data: { name?: string; phone?: string }) => Promise<void>;
+  deleteBuyer: (buyerId: string) => Promise<void>;
   addGrade: (gradeName: string, color: string, date: string) => Promise<void>;
   updateGrade: (gradeId: string, color: string) => Promise<void>;
   deleteGrade: (gradeId: string) => Promise<void>;
@@ -290,6 +291,23 @@ export const useStore = create<AppState>((set, get) => ({
       buyers: state.buyers.map((b) =>
         b.id === buyerId ? { ...b, ...data } : b
       ),
+    }));
+  },
+
+  deleteBuyer: async (buyerId) => {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('buyers')
+      .update({ is_active: false })
+      .eq('id', buyerId);
+
+    if (error) {
+      console.error('Error deleting buyer:', error);
+      throw error;
+    }
+
+    set((state) => ({
+      buyers: state.buyers.filter((b) => b.id !== buyerId),
     }));
   },
 

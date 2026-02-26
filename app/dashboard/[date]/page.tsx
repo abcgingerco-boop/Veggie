@@ -15,7 +15,7 @@ import type { DailyReportData, Vehicle, Buyer } from '@/lib/types';
 export default function DashboardPage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = use(params);
   const router = useRouter();
-  const { vehicles, buyers, bagWeights, grades, fetchVehiclesForDate, fetchBagWeightsForDate, fetchBuyers, fetchGrades, getInventory, resetDay } = useStore();
+  const { vehicles, buyers, bagWeights, grades, fetchVehiclesForDate, fetchBagWeightsForDate, fetchBuyers, fetchGrades, getInventory, resetDay, deleteBuyer } = useStore();
 
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showBuyerModal, setShowBuyerModal] = useState(false);
@@ -103,32 +103,50 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
 
     report += `\nBUYERS SUMMARY\n`;
     report += `${'─'.repeat(30)}\n`;
-    if (buyerData.length === 0) {
-      report += `No buyers added\n\n`;
+    if (dateVehicles.length === 0 || buyerData.length === 0) {
+      report += `No buyer data\n\n`;
     } else {
-      buyerData.forEach((data: any) => {
-        report += `\n${data.buyer.name}`;
-        if (data.buyer.phone) report += ` (${data.buyer.phone})`;
-        report += `\n`;
-
-        if (data.grades.length === 0) {
-          report += `   No purchases yet\n`;
-        } else {
-          const sortedGrades = [...data.grades].sort((a: any, b: any) => a.grade.localeCompare(b.grade));
-          sortedGrades.forEach((gradeData: any) => {
-            report += `   Grade ${gradeData.grade}:\n`;
-            report += `      Bags: ${gradeData.totalBags}\n`;
-            report += `      Gross: ${gradeData.grossWeight} kg\n`;
-            report += `      Net: ${gradeData.netWeight} kg\n`;
-            report += `      Rate:\n`;
-            report += `      Amount:\n`;
-            gradeData.bags.forEach((bag: any) => {
-              report += `         Bag #${bag.bagNumber}: ${bag.weight} kg\n`;
-            });
-          });
-        }
+      let overallTotalBags = 0;
+      let overallTotalGross = 0;
+      let overallTotalNet = 0;
+      buyerData.forEach((d: any) => {
+        d.grades.forEach((g: any) => {
+          overallTotalBags += g.totalBags;
+          overallTotalGross += g.grossWeight;
+          overallTotalNet += g.netWeight;
+        });
       });
-      report += `\n`;
+
+      dateVehicles.forEach(vehicle => {
+        report += `\nVehicle: ${vehicle.vehicleNumber}\n`;
+        const sortedGrades = Object.entries(vehicle.gradeWiseBags).sort(([a], [b]) => a.localeCompare(b));
+        sortedGrades.forEach(([grade, vehicleBagCount]) => {
+          report += `  Grade ${grade} (${vehicleBagCount} bags from this vehicle)\n`;
+          const buyersForGrade = buyerData
+            .map((d: any) => {
+              const gd = d.grades.find((g: any) => g.grade === grade);
+              return gd ? { name: d.buyer.name, ...gd } : null;
+            })
+            .filter(Boolean);
+
+          if (buyersForGrade.length > 0) {
+            let gradeTotalBags = 0;
+            let gradeTotalGross = 0;
+            let gradeTotalNet = 0;
+            buyersForGrade.forEach((entry: any) => {
+              gradeTotalBags += entry.totalBags;
+              gradeTotalGross += entry.grossWeight;
+              gradeTotalNet += entry.netWeight;
+              report += `    ${entry.name}: Bags: ${entry.totalBags}, Gross: ${entry.grossWeight} kg, Net: ${entry.netWeight} kg\n`;
+            });
+            report += `    TOTAL: Bags: ${gradeTotalBags}, Gross: ${gradeTotalGross} kg, Net: ${gradeTotalNet} kg\n`;
+          } else {
+            report += `    No buyers for this grade\n`;
+          }
+        });
+      });
+
+      report += `\nTOTALS: Bags: ${overallTotalBags} | Gross: ${overallTotalGross} kg | Net: ${overallTotalNet} kg\n`;
     }
 
     const inventory = getInventory(date);
@@ -403,6 +421,17 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                           title="Edit buyer"
                         >
                           ✏️
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm(`Delete buyer "${data.buyer.name}"? This will hide them from the list.`)) {
+                              deleteBuyer(data.buyer.id);
+                            }
+                          }}
+                          className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition"
+                          title="Delete buyer"
+                        >
+                          🗑️
                         </button>
                       </div>
                       <button

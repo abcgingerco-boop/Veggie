@@ -2,19 +2,10 @@ import html2canvas from 'html2canvas';
 import type { DailyReportData, BuyerSummaryData } from './types';
 import { formatDisplayDate } from './calculations';
 
-const SWASTIK_SVG = `<svg viewBox="0 0 100 100" width="40" height="40">
-  <g stroke="#c2410c" stroke-width="7" stroke-linecap="round" fill="none">
-    <line x1="50" y1="15" x2="50" y2="85"/>
-    <line x1="15" y1="50" x2="85" y2="50"/>
-    <line x1="50" y1="15" x2="72" y2="15"/>
-    <line x1="85" y1="50" x2="85" y2="72"/>
-    <line x1="50" y1="85" x2="28" y2="85"/>
-    <line x1="15" y1="50" x2="15" y2="28"/>
-  </g>
-</svg>`;
-
 function buildReportHTML(data: DailyReportData): string {
   const displayDate = formatDisplayDate(data.date);
+
+  const thStyle = `padding:8px 10px;border-bottom:2px solid #c2410c;background:#fff;color:#c2410c;font-weight:bold;font-size:13px;text-align:center;`;
 
   // Vehicles table rows
   let vehicleRows = '';
@@ -30,23 +21,95 @@ function buildReportHTML(data: DailyReportData): string {
     });
   }
 
-  // Buyer summary rows (sorted by grade)
-  let buyerRows = '';
-  if (data.buyerSummaries.length > 0) {
-    data.buyerSummaries.forEach((bs) => {
-      const sortedGrades = [...bs.grades].sort((a, b) => a.grade.localeCompare(b.grade));
-      sortedGrades.forEach((g) => {
-        buyerRows += `<tr>
-          <td style="padding:6px 10px;border:1px solid #d1d5db;">${bs.buyer.name}</td>
-          <td style="padding:6px 10px;border:1px solid #d1d5db;">Grade ${g.grade}</td>
-          <td style="padding:6px 10px;border:1px solid #d1d5db;text-align:center;">${g.totalBags}</td>
-          <td style="padding:6px 10px;border:1px solid #d1d5db;text-align:center;">${g.grossWeight} kg</td>
-          <td style="padding:6px 10px;border:1px solid #d1d5db;text-align:center;">${g.netWeight} kg</td>
-          <td style="padding:6px 10px;border:1px solid #d1d5db;text-align:center;"></td>
-          <td style="padding:6px 10px;border:1px solid #d1d5db;text-align:center;"></td>
-        </tr>`;
-      });
+  // Calculate overall totals from buyer summaries
+  let overallTotalBags = 0;
+  let overallTotalGross = 0;
+  let overallTotalNet = 0;
+  data.buyerSummaries.forEach((bs) => {
+    bs.grades.forEach((g) => {
+      overallTotalBags += g.totalBags;
+      overallTotalGross += g.grossWeight;
+      overallTotalNet += g.netWeight;
     });
+  });
+
+  // Build Vehicle -> Grade -> Buyers section
+  let buyerSection = '';
+  if (data.vehicles.length > 0 && data.buyerSummaries.length > 0) {
+    data.vehicles.forEach((vehicle) => {
+      buyerSection += `<div style="margin-bottom:16px;">`;
+      buyerSection += `<div style="font-size:14px;font-weight:bold;color:#292524;margin-bottom:8px;padding:6px 10px;background:#f5f5f4;border-left:4px solid #c2410c;border-radius:2px;">Vehicle: ${vehicle.vehicleNumber}</div>`;
+
+      const sortedGrades = Object.entries(vehicle.gradeWiseBags).sort(([a], [b]) => a.localeCompare(b));
+
+      sortedGrades.forEach(([grade, vehicleBagCount]) => {
+        // Find all buyers who bought this grade
+        const buyersForGrade: { buyerName: string; totalBags: number; grossWeight: number; netWeight: number }[] = [];
+        data.buyerSummaries.forEach((bs) => {
+          const gradeData = bs.grades.find((g) => g.grade === grade);
+          if (gradeData) {
+            buyersForGrade.push({ buyerName: bs.buyer.name, totalBags: gradeData.totalBags, grossWeight: gradeData.grossWeight, netWeight: gradeData.netWeight });
+          }
+        });
+
+        buyerSection += `<div style="margin-left:16px;margin-bottom:12px;">`;
+        buyerSection += `<div style="font-size:13px;font-weight:bold;color:#c2410c;margin-bottom:6px;">Grade ${grade} (${vehicleBagCount} bags from this vehicle)</div>`;
+
+        if (buyersForGrade.length > 0) {
+          buyerSection += `<table style="width:100%;border-collapse:collapse;font-size:12px;">`;
+          buyerSection += `<thead><tr>
+            <th style="${thStyle}">Buyer</th>
+            <th style="${thStyle}">Bags</th>
+            <th style="${thStyle}">Gross</th>
+            <th style="${thStyle}">Net</th>
+            <th style="${thStyle}">Rate</th>
+            <th style="${thStyle}">Amount</th>
+          </tr></thead><tbody>`;
+
+          let gradeTotalBags = 0;
+          let gradeTotalGross = 0;
+          let gradeTotalNet = 0;
+
+          buyersForGrade.forEach((entry) => {
+            gradeTotalBags += entry.totalBags;
+            gradeTotalGross += entry.grossWeight;
+            gradeTotalNet += entry.netWeight;
+
+            buyerSection += `<tr>
+              <td style="padding:5px 8px;border:1px solid #d1d5db;">${entry.buyerName}</td>
+              <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${entry.totalBags}</td>
+              <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${entry.grossWeight} kg</td>
+              <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${entry.netWeight} kg</td>
+              <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;"></td>
+              <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;"></td>
+            </tr>`;
+          });
+
+          // Grade totals row
+          buyerSection += `<tr style="font-weight:bold;background:#f9fafb;">
+            <td style="padding:5px 8px;border:1px solid #d1d5db;">TOTAL</td>
+            <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${gradeTotalBags}</td>
+            <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${gradeTotalGross} kg</td>
+            <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${gradeTotalNet} kg</td>
+            <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;"></td>
+            <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;"></td>
+          </tr>`;
+
+          buyerSection += `</tbody></table>`;
+        } else {
+          buyerSection += `<div style="font-size:12px;color:#9ca3af;padding:4px 8px;">No buyers for this grade</div>`;
+        }
+
+        buyerSection += `</div>`;
+      });
+
+      buyerSection += `</div>`;
+    });
+
+    // Overall totals bar
+    buyerSection += `<div style="margin-top:8px;padding:8px 10px;background:#f5f5f4;border-radius:4px;font-size:13px;font-weight:bold;color:#292524;">
+      TOTALS: Bags: ${overallTotalBags} | Gross: ${overallTotalGross} kg | Net: ${overallTotalNet} kg
+    </div>`;
   }
 
   // Inventory rows
@@ -62,19 +125,13 @@ function buildReportHTML(data: DailyReportData): string {
     });
   }
 
-  const thStyle = `padding:8px 10px;border:1px solid #c2410c;background:#c2410c;color:#fff;font-weight:bold;font-size:13px;text-align:center;`;
-
   return `
     <div style="width:800px;padding:24px;font-family:Arial,Helvetica,sans-serif;background:#fff;color:#1f2937;">
       <!-- Header -->
       <div style="text-align:center;margin-bottom:20px;padding-bottom:16px;border-bottom:3px solid #c2410c;">
-        <div style="display:flex;align-items:center;justify-content:center;gap:16px;">
-          ${SWASTIK_SVG}
-          <div>
-            <div style="font-size:28px;font-weight:bold;color:#c2410c;letter-spacing:1px;">ABC Ginger Co.</div>
-            <div style="font-size:14px;color:#78716c;margin-top:4px;">Daily Consolidated Report</div>
-          </div>
-          ${SWASTIK_SVG}
+        <div>
+          <div style="font-size:28px;font-weight:bold;color:#c2410c;letter-spacing:1px;">ABC Ginger Co.</div>
+          <div style="font-size:14px;color:#78716c;margin-top:4px;">Daily Consolidated Report</div>
         </div>
         <div style="margin-top:10px;font-size:16px;font-weight:bold;color:#292524;">Date: ${displayDate}</div>
       </div>
@@ -95,24 +152,10 @@ function buildReportHTML(data: DailyReportData): string {
         </table>` : '<div style="font-size:13px;color:#9ca3af;padding:8px;">No vehicles added</div>'}
       </div>
 
-      <!-- Buyer Summary Table -->
+      <!-- Buyer Details (Vehicle -> Grade -> Buyers) -->
       <div style="margin-bottom:20px;">
         <div style="font-size:16px;font-weight:bold;color:#c2410c;margin-bottom:8px;">Buyers Summary</div>
-        ${data.buyerSummaries.length > 0 ? `
-        <table style="width:100%;border-collapse:collapse;font-size:13px;">
-          <thead>
-            <tr>
-              <th style="${thStyle}">Buyer</th>
-              <th style="${thStyle}">Grade</th>
-              <th style="${thStyle}">Bags</th>
-              <th style="${thStyle}">Gross</th>
-              <th style="${thStyle}">Net</th>
-              <th style="${thStyle}">Rate</th>
-              <th style="${thStyle}">Amount</th>
-            </tr>
-          </thead>
-          <tbody>${buyerRows}</tbody>
-        </table>` : '<div style="font-size:13px;color:#9ca3af;padding:8px;">No buyer data</div>'}
+        ${buyerSection || '<div style="font-size:13px;color:#9ca3af;padding:8px;">No buyer data</div>'}
       </div>
 
       <!-- Inventory Table -->
@@ -176,7 +219,7 @@ export async function generateDailyReportImage(data: DailyReportData): Promise<B
 
 function buildBuyerReportHTML(data: BuyerSummaryData): string {
   const displayDate = formatDisplayDate(data.date);
-  const thStyle = `padding:8px 10px;border:1px solid #c2410c;background:#c2410c;color:#fff;font-weight:bold;font-size:13px;text-align:center;`;
+  const thStyle = `padding:8px 10px;border-bottom:2px solid #c2410c;background:#fff;color:#c2410c;font-weight:bold;font-size:13px;text-align:center;`;
   const tdStyle = `padding:6px 10px;border:1px solid #d1d5db;`;
 
   // Grade details with bag pills
@@ -244,13 +287,9 @@ function buildBuyerReportHTML(data: BuyerSummaryData): string {
     <div style="width:800px;padding:24px;font-family:Arial,Helvetica,sans-serif;background:#fff;color:#1f2937;">
       <!-- Header -->
       <div style="text-align:center;margin-bottom:20px;padding-bottom:16px;border-bottom:3px solid #c2410c;">
-        <div style="display:flex;align-items:center;justify-content:center;gap:16px;">
-          ${SWASTIK_SVG}
-          <div>
-            <div style="font-size:28px;font-weight:bold;color:#c2410c;letter-spacing:1px;">ABC Ginger Co.</div>
-            <div style="font-size:14px;color:#78716c;margin-top:4px;">Buyer Summary</div>
-          </div>
-          ${SWASTIK_SVG}
+        <div>
+          <div style="font-size:28px;font-weight:bold;color:#c2410c;letter-spacing:1px;">ABC Ginger Co.</div>
+          <div style="font-size:14px;color:#78716c;margin-top:4px;">Buyer Summary</div>
         </div>
         <div style="margin-top:10px;">
           <div style="font-size:18px;font-weight:bold;color:#292524;">${data.buyer.name}</div>

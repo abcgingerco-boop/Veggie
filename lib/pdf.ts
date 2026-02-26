@@ -109,35 +109,91 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
     y += 10;
   }
 
-  // Buyers summary table
+  // Buyers summary — Vehicle -> Grade -> Buyers
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('Buyers Summary', 14, y);
-  y += 4;
+  y += 6;
 
-  if (data.buyerSummaries.length > 0) {
-    const buyerRows = data.buyerSummaries.flatMap((bs) => {
-      const sortedGrades = [...bs.grades].sort((a, b) => a.grade.localeCompare(b.grade));
-      return sortedGrades.map((g) => [
-        bs.buyer.name,
-        `Grade ${g.grade}`,
-        String(g.totalBags),
-        `${g.grossWeight} kg`,
-        `${g.netWeight} kg`,
-        '',
-        '',
-      ]);
+  if (data.vehicles.length > 0 && data.buyerSummaries.length > 0) {
+    let overallTotalBags = 0;
+    let overallTotalGross = 0;
+    let overallTotalNet = 0;
+    data.buyerSummaries.forEach((bs) => {
+      bs.grades.forEach((g) => {
+        overallTotalBags += g.totalBags;
+        overallTotalGross += g.grossWeight;
+        overallTotalNet += g.netWeight;
+      });
     });
 
-    autoTable(doc, {
-      startY: y,
-      head: [['Buyer', 'Grade', 'Bags', 'Gross', 'Net', 'Rate', 'Amount']],
-      body: buyerRows,
-      headStyles: getTableHeadStyles(printFriendly),
-      margin: { left: 14, right: 14 },
+    data.vehicles.forEach((vehicle) => {
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Vehicle: ${vehicle.vehicleNumber}`, 14, y);
+      y += 5;
+
+      const sortedGrades = Object.entries(vehicle.gradeWiseBags).sort(([a], [b]) => a.localeCompare(b));
+
+      sortedGrades.forEach(([grade, vehicleBagCount]) => {
+        const buyersForGrade = data.buyerSummaries
+          .map((bs) => {
+            const gd = bs.grades.find((g) => g.grade === grade);
+            return gd ? [bs.buyer.name, String(gd.totalBags), `${gd.grossWeight} kg`, `${gd.netWeight} kg`, '', ''] : null;
+          })
+          .filter((row): row is string[] => row !== null);
+
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(194, 65, 12);
+        doc.text(`Grade ${grade} (${vehicleBagCount} bags from this vehicle)`, 20, y);
+        doc.setTextColor(0, 0, 0);
+        y += 3;
+
+        if (buyersForGrade.length > 0) {
+          let gradeTotalBags = 0;
+          let gradeTotalGross = 0;
+          let gradeTotalNet = 0;
+          buyersForGrade.forEach((row) => {
+            gradeTotalBags += parseInt(row[1]);
+            gradeTotalGross += parseInt(row[2]);
+            gradeTotalNet += parseInt(row[3]);
+          });
+          const bodyRows = [...buyersForGrade, ['TOTAL', String(gradeTotalBags), `${gradeTotalGross} kg`, `${gradeTotalNet} kg`, '', '']];
+
+          autoTable(doc, {
+            startY: y,
+            head: [['Buyer', 'Bags', 'Gross', 'Net', 'Rate', 'Amount']],
+            body: bodyRows,
+            headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 8 },
+            bodyStyles: { fontSize: 8 },
+            margin: { left: 20, right: 14 },
+            didParseCell: (hookData) => {
+              if (hookData.section === 'body' && hookData.row.index === bodyRows.length - 1) {
+                hookData.cell.styles.fontStyle = 'bold';
+              }
+            },
+          });
+
+          y = (doc as any).lastAutoTable.finalY + 6;
+        } else {
+          doc.setFontSize(8);
+          doc.setFont('helvetica', 'normal');
+          doc.text('No buyers for this grade', 24, y);
+          y += 6;
+        }
+      });
+
+      y += 2;
     });
 
-    y = (doc as any).lastAutoTable.finalY + 10;
+    // Overall totals
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
+    doc.text(`TOTALS: Bags: ${overallTotalBags} | Gross: ${overallTotalGross} kg | Net: ${overallTotalNet} kg`, 14, y);
+    y += 10;
   } else {
     y += 6;
     doc.setFontSize(10);
