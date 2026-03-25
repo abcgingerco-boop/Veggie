@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
-import { calculateGradeWiseStats, formatDisplayDate } from '@/lib/calculations';
+import { calculateGradeWiseStats, formatDisplayDate, calculateAmount } from '@/lib/calculations';
 import { generateBuyerSummaryPDF, sharePDF } from '@/lib/pdf';
 import { generateBuyerReportImage, shareReportImage } from '@/lib/report-image';
 import { useOnlineStatus } from '@/components/OnlineStatus';
@@ -20,7 +20,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
   const [fetchError, setFetchError] = useState('');
   const isOnline = useOnlineStatus();
 
-  const { buyers, bagWeights, addBagWeight, deleteBagWeight, grades, vehicles, fetchBuyers, fetchGrades, fetchBagWeightsForDate, fetchVehiclesForDate, getInventory } = useStore();
+  const { buyers, bagWeights, addBagWeight, deleteBagWeight, grades, vehicles, fetchBuyers, fetchGrades, fetchBagWeightsForDate, fetchVehiclesForDate, fetchBuyerRatesForDate, getInventory, getBuyerRate, setBuyerRate } = useStore();
 
   const loadData = () => {
     setLoading(true);
@@ -30,6 +30,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
       fetchGrades(date),
       fetchBagWeightsForDate(date),
       fetchVehiclesForDate(date),
+      fetchBuyerRatesForDate(date),
     ])
       .catch(() => setFetchError('Failed to load data. Please check your connection.'))
       .finally(() => setLoading(false));
@@ -86,6 +87,12 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
       summary += `   Bags: ${stat.totalBags}\n`;
       summary += `   Gross Weight: ${stat.grossWeight} kg\n`;
       summary += `   Net Weight: ${stat.netWeight} kg\n`;
+      const gradeRate = getBuyerRate(buyerId, stat.grade, date);
+      if (gradeRate != null) {
+        const gradeAmt = calculateAmount(gradeRate, stat.netWeight, stat.totalBags);
+        summary += `   Rate: ${gradeRate}\n`;
+        summary += `   Amount: ₹${gradeAmt.toLocaleString('en-IN')}\n`;
+      }
       summary += `   Individual Bags:\n`;
       stat.bags.forEach((bag: any) => {
         summary += `      • Bag #${bag.bagNumber}: ${bag.weight} kg\n`;
@@ -122,6 +129,8 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
   );
 
   const stats = bags.length > 0 ? calculateGradeWiseStats(bags) : null;
+  const currentRate = getBuyerRate(buyerId, grade, date);
+  const currentAmount = (stats && currentRate) ? calculateAmount(currentRate, stats.netWeight, stats.totalBags) : undefined;
 
   // Inventory check for this grade
   const inventory = getInventory(date);
@@ -134,6 +143,8 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
       alert('No bags entered yet');
       return;
     }
+    const rate = getBuyerRate(buyerId, grade, date);
+    const amount = rate ? calculateAmount(rate, stats.netWeight, stats.totalBags) : undefined;
     const pdfData: BuyerSummaryData = {
       buyer,
       date,
@@ -144,6 +155,8 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
         totalBags: stats.totalBags,
         grossWeight: stats.grossWeight,
         netWeight: stats.netWeight,
+        rate,
+        amount,
       }],
     };
     const doc = generateBuyerSummaryPDF(pdfData);
@@ -155,6 +168,8 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
       alert('No bags entered yet');
       return;
     }
+    const rate2 = getBuyerRate(buyerId, grade, date);
+    const amount2 = rate2 ? calculateAmount(rate2, stats.netWeight, stats.totalBags) : undefined;
     const pdfData: BuyerSummaryData = {
       buyer,
       date,
@@ -165,6 +180,8 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
         totalBags: stats.totalBags,
         grossWeight: stats.grossWeight,
         netWeight: stats.netWeight,
+        rate: rate2,
+        amount: amount2,
       }],
     };
     const doc = generateBuyerSummaryPDF(pdfData, true);
@@ -176,6 +193,8 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
       alert('No bags entered yet');
       return;
     }
+    const rate3 = getBuyerRate(buyerId, grade, date);
+    const amount3 = rate3 ? calculateAmount(rate3, stats.netWeight, stats.totalBags) : undefined;
     const imageData: BuyerSummaryData = {
       buyer,
       date,
@@ -186,6 +205,8 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
         totalBags: stats.totalBags,
         grossWeight: stats.grossWeight,
         netWeight: stats.netWeight,
+        rate: rate3,
+        amount: amount3,
       }],
     };
     try {
@@ -458,6 +479,42 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
                   {stats.netWeight}
                 </div>
                 <div className="text-xs font-bold mt-0.5" style={{ color: gradeColor }}>kg</div>
+              </div>
+            </div>
+
+            {/* Rate & Amount */}
+            <div className="grid grid-cols-2 gap-3 mt-3">
+              <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-4 border border-amber-300">
+                <div className="text-xs font-semibold text-amber-700 mb-2">Rate (per kg)</div>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  defaultValue={currentRate ?? ''}
+                  onBlur={async (e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!isNaN(val) && val >= 0) {
+                      try {
+                        await setBuyerRate(buyerId, grade, date, val);
+                      } catch {
+                        // silently ignore if table doesn't exist yet
+                      }
+                    }
+                  }}
+                  placeholder="Enter rate"
+                  className="w-full px-3 py-2 border border-amber-300 rounded-lg text-2xl font-bold text-amber-900 text-center bg-white placeholder:text-amber-300 outline-none focus:ring-2 focus:ring-amber-400"
+                />
+              </div>
+              <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-4 border border-green-300">
+                <div className="text-xs font-semibold text-green-700 mb-2">Amount</div>
+                <div className="text-3xl font-extrabold text-green-900 text-center mt-1">
+                  {currentAmount != null ? `₹${currentAmount.toLocaleString('en-IN')}` : '—'}
+                </div>
+                {currentRate != null && (
+                  <div className="text-xs text-green-600 text-center mt-1">
+                    ({currentRate}×{stats.netWeight})×1.01 + 10×{stats.totalBags}
+                  </div>
+                )}
               </div>
             </div>
 

@@ -34,6 +34,15 @@ export function calculateGradeWiseStats(bags: BagWeight[]) {
   return calculateNetWeight(weights);
 }
 
+// Calculate amount: (rate * netWt) + 1%(rate * netWt) + 10 * bags
+// Simplified: rate * netWt * 1.01 + 10 * bags
+export function calculateAmount(rate: number, netWeight: number, totalBags: number): number {
+  const baseAmount = rate * netWeight;
+  const commission = baseAmount * 0.01;
+  const bagCharges = 10 * totalBags;
+  return Math.round((baseAmount + commission + bagCharges) * 100) / 100;
+}
+
 export function formatDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');

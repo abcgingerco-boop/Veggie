@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useStore } from '@/lib/store';
-import { calculateGradeWiseStats, formatDisplayDate } from '@/lib/calculations';
+import { calculateGradeWiseStats, formatDisplayDate, calculateAmount } from '@/lib/calculations';
 import { generateBuyerSummaryPDF, sharePDF } from '@/lib/pdf';
 import { generateBuyerReportImage, shareReportImage } from '@/lib/report-image';
 import type { BuyerSummaryData } from '@/lib/types';
@@ -16,7 +16,7 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(false);
   const [fetchError, setFetchError] = useState('');
 
-  const { buyers, bagWeights, grades, vehicles, fetchBuyers, fetchBagWeightsForDate, fetchGrades, fetchVehiclesForDate, getInventory } = useStore();
+  const { buyers, bagWeights, grades, vehicles, buyerRates, fetchBuyers, fetchBagWeightsForDate, fetchGrades, fetchVehiclesForDate, fetchBuyerRatesForDate, getInventory, getBuyerRate, setBuyerRate } = useStore();
 
   const loadData = () => {
     setLoading(true);
@@ -26,6 +26,7 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
       fetchGrades(date),
       fetchBagWeightsForDate(date),
       fetchVehiclesForDate(date),
+      fetchBuyerRatesForDate(date),
     ])
       .catch(() => setFetchError('Failed to load data. Please check your connection.'))
       .finally(() => setLoading(false));
@@ -59,11 +60,15 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
   const gradeStats = Object.entries(gradeGroups).map(([gradeName, bags]) => {
     const stats = calculateGradeWiseStats(bags);
     const gradeInfo = grades.find(g => g.name === gradeName);
+    const rate = getBuyerRate(buyerId, gradeName, date);
+    const amount = rate ? calculateAmount(rate, stats.netWeight, stats.totalBags) : undefined;
     return {
       grade: gradeName,
       color: gradeInfo?.color || '#6366f1',
       bags,
-      ...stats
+      ...stats,
+      rate,
+      amount,
     };
   });
 
@@ -85,6 +90,8 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
       summary += `   Bags: ${stat.totalBags}\n`;
       summary += `   Gross Weight: ${stat.grossWeight} kg\n`;
       summary += `   Net Weight: ${stat.netWeight} kg\n`;
+      if (stat.rate != null) summary += `   Rate: ${stat.rate}\n`;
+      if (stat.amount != null) summary += `   Amount: ₹${stat.amount.toLocaleString('en-IN')}\n`;
       summary += `   Individual Bags:\n`;
       stat.bags.forEach((bag: any) => {
         summary += `      Bag #${bag.bagNumber}: ${bag.weight} kg\n`;
@@ -257,7 +264,7 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-3">
                     <div
-                      className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold shadow-md"
+                      className="px-2.5 py-1.5 rounded-full flex items-center justify-center text-white font-bold text-sm whitespace-nowrap shadow-md min-w-[40px]"
                       style={{ backgroundColor: gradeStat.color }}
                     >
                       {gradeStat.grade}
@@ -301,6 +308,37 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
                       {gradeStat.netWeight}
                     </div>
                     <div className="text-xs font-bold" style={{ color: gradeStat.color }}>kg</div>
+                  </div>
+                </div>
+
+                {/* Rate & Amount */}
+                <div className="grid grid-cols-2 gap-3 mb-3">
+                  <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-lg p-3 border border-amber-300">
+                    <div className="text-xs font-semibold text-amber-700 mb-1">Rate (per kg)</div>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      defaultValue={gradeStat.rate ?? ''}
+                      onBlur={async (e) => {
+                        const val = parseFloat(e.target.value);
+                        if (!isNaN(val) && val >= 0) {
+                          try {
+                            await setBuyerRate(buyerId, gradeStat.grade, date, val);
+                          } catch {
+                            // silently ignore if table doesn't exist yet
+                          }
+                        }
+                      }}
+                      placeholder="Enter rate"
+                      className="w-full px-2 py-1.5 border border-amber-300 rounded text-lg font-bold text-amber-900 text-center bg-white placeholder:text-amber-300 outline-none focus:ring-2 focus:ring-amber-400"
+                    />
+                  </div>
+                  <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-3 border border-green-300">
+                    <div className="text-xs font-semibold text-green-700 mb-1">Amount</div>
+                    <div className="text-2xl font-extrabold text-green-900 text-center mt-1.5">
+                      {gradeStat.amount != null ? `₹${gradeStat.amount.toLocaleString('en-IN')}` : '—'}
+                    </div>
                   </div>
                 </div>
 
@@ -348,7 +386,7 @@ export default function BuyerOverviewPage({ params }: { params: Promise<{ id: st
                       Grade {grade.name}
                     </span>
                     <div
-                      className="w-7 h-7 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                      className="px-1.5 py-0.5 rounded-full flex items-center justify-center text-white font-bold text-[10px] whitespace-nowrap min-w-[28px]"
                       style={{ backgroundColor: noStock && !hasBags ? '#9ca3af' : grade.color }}
                     >
                       {grade.name}

@@ -140,7 +140,10 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
         const buyersForGrade = data.buyerSummaries
           .map((bs) => {
             const gd = bs.grades.find((g) => g.grade === grade);
-            return gd ? [bs.buyer.name, String(gd.totalBags), `${gd.grossWeight} kg`, `${gd.netWeight} kg`, '', ''] : null;
+            if (!gd) return null;
+            const rateStr = gd.rate != null ? String(gd.rate) : '';
+            const amtStr = gd.amount != null ? `₹${gd.amount.toLocaleString('en-IN')}` : '';
+            return [bs.buyer.name, String(gd.totalBags), `${gd.grossWeight} kg`, `${gd.netWeight} kg`, rateStr, amtStr];
           })
           .filter((row): row is string[] => row !== null);
 
@@ -155,12 +158,15 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
           let gradeTotalBags = 0;
           let gradeTotalGross = 0;
           let gradeTotalNet = 0;
+          let gradeTotalAmt = 0;
           buyersForGrade.forEach((row) => {
             gradeTotalBags += parseInt(row[1]);
             gradeTotalGross += parseInt(row[2]);
             gradeTotalNet += parseInt(row[3]);
+            if (row[5]) gradeTotalAmt += parseFloat(row[5].replace(/[₹,]/g, '')) || 0;
           });
-          const bodyRows = [...buyersForGrade, ['TOTAL', String(gradeTotalBags), `${gradeTotalGross} kg`, `${gradeTotalNet} kg`, '', '']];
+          const totalAmtStr = gradeTotalAmt > 0 ? `₹${gradeTotalAmt.toLocaleString('en-IN')}` : '';
+          const bodyRows = [...buyersForGrade, ['TOTAL', String(gradeTotalBags), `${gradeTotalGross} kg`, `${gradeTotalNet} kg`, '', totalAmtStr]];
 
           autoTable(doc, {
             startY: y,
@@ -310,11 +316,14 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(80, 80, 80);
-      doc.text(
-        `Bags: ${gradeStat.totalBags}  |  Gross: ${gradeStat.grossWeight} kg  |  Net: ${gradeStat.netWeight} kg`,
-        marginLeft,
-        y
-      );
+      let summaryLine = `Bags: ${gradeStat.totalBags}  |  Gross: ${gradeStat.grossWeight} kg  |  Net: ${gradeStat.netWeight} kg`;
+      if (gradeStat.rate != null) {
+        summaryLine += `  |  Rate: ${gradeStat.rate}`;
+      }
+      if (gradeStat.amount != null) {
+        summaryLine += `  |  Amt: ₹${gradeStat.amount.toLocaleString('en-IN')}`;
+      }
+      doc.text(summaryLine, marginLeft, y);
       y += 8;
     }
 
@@ -332,21 +341,40 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
     y += 8;
 
     // Summary table
-    const summaryRows = data.grades.map((g) => [
-      `Grade ${g.grade}`,
-      String(g.totalBags),
-      `${g.grossWeight} kg`,
-      `${g.netWeight} kg`,
-    ]);
+    const hasAnyRate = data.grades.some((g) => g.rate != null);
+    const summaryRows = data.grades.map((g) => {
+      const row = [
+        `Grade ${g.grade}`,
+        String(g.totalBags),
+        `${g.grossWeight} kg`,
+        `${g.netWeight} kg`,
+      ];
+      if (hasAnyRate) {
+        row.push(g.rate != null ? String(g.rate) : '');
+        row.push(g.amount != null ? `₹${g.amount.toLocaleString('en-IN')}` : '');
+      }
+      return row;
+    });
 
     const totalBagsCount = data.grades.reduce((s, g) => s + g.totalBags, 0);
     const totalGross = data.grades.reduce((s, g) => s + g.grossWeight, 0);
     const totalNet = data.grades.reduce((s, g) => s + g.netWeight, 0);
-    summaryRows.push(['TOTAL', String(totalBagsCount), `${totalGross} kg`, `${totalNet} kg`]);
+    const totalAmt = data.grades.reduce((s, g) => s + (g.amount || 0), 0);
+    const totalRow = ['TOTAL', String(totalBagsCount), `${totalGross} kg`, `${totalNet} kg`];
+    if (hasAnyRate) {
+      totalRow.push('');
+      totalRow.push(totalAmt > 0 ? `₹${totalAmt.toLocaleString('en-IN')}` : '');
+    }
+    summaryRows.push(totalRow);
+
+    const summaryHead = ['Grade', 'Bags', 'Gross Wt', 'Net Wt'];
+    if (hasAnyRate) {
+      summaryHead.push('Rate', 'Amount');
+    }
 
     autoTable(doc, {
       startY: y,
-      head: [['Grade', 'Bags', 'Gross Wt', 'Net Wt']],
+      head: [summaryHead],
       body: summaryRows,
       headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 8 },
       bodyStyles: { fontSize: 8 },

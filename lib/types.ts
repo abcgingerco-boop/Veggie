@@ -80,6 +80,14 @@ export interface ShareableBuyerSummary {
   totalNetWeight: number;
 }
 
+export interface BuyerRate {
+  id: string;
+  buyerId: string;
+  grade: string;
+  date: string;
+  rate: number;
+}
+
 export interface WeightCalculation {
   totalBags: number;
   grossWeight: number;
@@ -98,6 +106,8 @@ export interface DailyReportData {
       totalBags: number;
       grossWeight: number;
       netWeight: number;
+      rate?: number;
+      amount?: number;
     }[];
   }[];
   inventory: GradeInventory[];
@@ -113,5 +123,7 @@ export interface BuyerSummaryData {
     totalBags: number;
     grossWeight: number;
     netWeight: number;
+    rate?: number;
+    amount?: number;
   }[];
 }

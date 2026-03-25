@@ -116,7 +116,7 @@ export function AddVehicleModal({ date, onClose, vehicle }: AddVehicleModalProps
                         Grade {grade.name}
                       </span>
                       <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                        className="px-2 py-1 rounded-full flex items-center justify-center text-white font-bold text-xs whitespace-nowrap min-w-[32px]"
                         style={{ backgroundColor: grade.color }}
                       >
                         {grade.name}

@@ -70,21 +70,30 @@ function buildReportHTML(data: DailyReportData): string {
           let gradeTotalGross = 0;
           let gradeTotalNet = 0;
 
+          let gradeTotalAmt = 0;
           buyersForGrade.forEach((entry) => {
             gradeTotalBags += entry.totalBags;
             gradeTotalGross += entry.grossWeight;
             gradeTotalNet += entry.netWeight;
+
+            // Find rate/amount from the buyer summary data
+            const bs = data.buyerSummaries.find((b) => b.buyer.name === entry.buyerName);
+            const gd = bs?.grades.find((g) => g.grade === grade);
+            const rateStr = gd?.rate != null ? String(gd.rate) : '';
+            const amtStr = gd?.amount != null ? `₹${gd.amount.toLocaleString('en-IN')}` : '';
+            if (gd?.amount) gradeTotalAmt += gd.amount;
 
             buyerSection += `<tr>
               <td style="padding:5px 8px;border:1px solid #d1d5db;">${entry.buyerName}</td>
               <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${entry.totalBags}</td>
               <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${entry.grossWeight} kg</td>
               <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${entry.netWeight} kg</td>
-              <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;"></td>
-              <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;"></td>
+              <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${rateStr}</td>
+              <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${amtStr}</td>
             </tr>`;
           });
 
+          const totalAmtStr = gradeTotalAmt > 0 ? `₹${gradeTotalAmt.toLocaleString('en-IN')}` : '';
           // Grade totals row
           buyerSection += `<tr style="font-weight:bold;background:#f9fafb;">
             <td style="padding:5px 8px;border:1px solid #d1d5db;">TOTAL</td>
@@ -92,7 +101,7 @@ function buildReportHTML(data: DailyReportData): string {
             <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${gradeTotalGross} kg</td>
             <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${gradeTotalNet} kg</td>
             <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;"></td>
-            <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;"></td>
+            <td style="padding:5px 8px;border:1px solid #d1d5db;text-align:center;">${totalAmtStr}</td>
           </tr>`;
 
           buyerSection += `</tbody></table>`;
@@ -252,6 +261,15 @@ function buildBuyerReportHTML(data: BuyerSummaryData): string {
             <div style="font-size:11px;color:${color};font-weight:700;">Net</div>
             <div style="font-size:18px;font-weight:900;color:${color};">${gradeStat.netWeight} kg</div>
           </div>
+          ${gradeStat.rate != null ? `
+          <div style="text-align:center;padding:6px 12px;background:#fef3c7;border-radius:6px;border:1px solid #f59e0b;">
+            <div style="font-size:11px;color:#92400e;font-weight:600;">Rate</div>
+            <div style="font-size:18px;font-weight:800;color:#78350f;">${gradeStat.rate}</div>
+          </div>
+          <div style="text-align:center;padding:6px 12px;background:#dcfce7;border-radius:6px;border:2px solid #22c55e;">
+            <div style="font-size:11px;color:#15803d;font-weight:700;">Amount</div>
+            <div style="font-size:18px;font-weight:900;color:#14532d;">₹${gradeStat.amount?.toLocaleString('en-IN') || '—'}</div>
+          </div>` : ''}
         </div>
         <div style="background:#f9fafb;border-radius:6px;padding:8px;">
           ${bagPills}
@@ -261,17 +279,21 @@ function buildBuyerReportHTML(data: BuyerSummaryData): string {
   });
 
   // Summary table
+  const hasAnyRate = sortedGrades.some((g) => g.rate != null);
   let summaryRows = '';
-  let totalBags = 0, totalGross = 0, totalNet = 0;
+  let totalBags = 0, totalGross = 0, totalNet = 0, totalAmt = 0;
   sortedGrades.forEach((g) => {
     totalBags += g.totalBags;
     totalGross += g.grossWeight;
     totalNet += g.netWeight;
+    if (g.amount) totalAmt += g.amount;
     summaryRows += `<tr>
       <td style="${tdStyle}">Grade ${g.grade}</td>
       <td style="${tdStyle}text-align:center;">${g.totalBags}</td>
       <td style="${tdStyle}text-align:center;">${g.grossWeight} kg</td>
       <td style="${tdStyle}text-align:center;">${g.netWeight} kg</td>
+      ${hasAnyRate ? `<td style="${tdStyle}text-align:center;">${g.rate != null ? g.rate : ''}</td>
+      <td style="${tdStyle}text-align:center;">${g.amount != null ? '₹' + g.amount.toLocaleString('en-IN') : ''}</td>` : ''}
     </tr>`;
   });
   summaryRows += `<tr>
@@ -279,6 +301,8 @@ function buildBuyerReportHTML(data: BuyerSummaryData): string {
     <td style="${tdStyle}text-align:center;font-weight:bold;">${totalBags}</td>
     <td style="${tdStyle}text-align:center;font-weight:bold;">${totalGross} kg</td>
     <td style="${tdStyle}text-align:center;font-weight:bold;">${totalNet} kg</td>
+    ${hasAnyRate ? `<td style="${tdStyle}text-align:center;font-weight:bold;"></td>
+    <td style="${tdStyle}text-align:center;font-weight:bold;">${totalAmt > 0 ? '₹' + totalAmt.toLocaleString('en-IN') : ''}</td>` : ''}
   </tr>`;
 
   const phoneInfo = data.buyer.phone ? `<div style="font-size:13px;color:#78716c;">Tel: ${data.buyer.phone}</div>` : '';
@@ -311,6 +335,7 @@ function buildBuyerReportHTML(data: BuyerSummaryData): string {
               <th style="${thStyle}">Bags</th>
               <th style="${thStyle}">Gross Wt</th>
               <th style="${thStyle}">Net Wt</th>
+              ${hasAnyRate ? `<th style="${thStyle}">Rate</th><th style="${thStyle}">Amount</th>` : ''}
             </tr>
           </thead>
           <tbody>${summaryRows}</tbody>

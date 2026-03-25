@@ -92,7 +92,7 @@ export function ManageGradesModal({ date, onClose }: ManageGradesModalProps) {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-lg"
+                        className="px-2.5 py-1.5 rounded-full flex items-center justify-center text-white font-bold text-sm whitespace-nowrap min-w-[40px]"
                         style={{ backgroundColor: editingId === grade.id ? editColor : grade.color }}
                       >
                         {grade.name}
@@ -241,7 +241,7 @@ export function ManageGradesModal({ date, onClose }: ManageGradesModalProps) {
                   }}
                 >
                   <div
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-xl"
+                    className="px-3 py-2 rounded-full flex items-center justify-center text-white font-bold text-base whitespace-nowrap min-w-[48px]"
                     style={{ backgroundColor: selectedColor }}
                   >
                     {newGradeName.trim() || '?'}

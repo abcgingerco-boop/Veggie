@@ -1,4 +1,4 @@
-import { Vehicle, Buyer, Grade, BagWeight } from '../types'
+import { Vehicle, Buyer, Grade, BagWeight, BuyerRate } from '../types'
 
 export function mapVehicle(row: any): Vehicle {
   return {
@@ -38,5 +38,15 @@ export function mapBagWeight(row: any): BagWeight {
     bagNumber: row.bag_number,
     weight: Number(row.weight),
     timestamp: new Date(row.created_at).getTime(),
+  }
+}
+
+export function mapBuyerRate(row: any): BuyerRate {
+  return {
+    id: row.id,
+    buyerId: row.buyer_id,
+    grade: row.grade,
+    date: row.date,
+    rate: Number(row.rate),
   }
 }

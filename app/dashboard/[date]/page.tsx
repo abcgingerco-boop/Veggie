@@ -7,7 +7,7 @@ import { LiveInventory } from '@/components/LiveInventory';
 import { AddVehicleModal } from '@/components/AddVehicleModal';
 import { AddBuyerModal } from '@/components/AddBuyerModal';
 import { ManageGradesModal } from '@/components/ManageGradesModal';
-import { formatDisplayDate, calculateGradeWiseStats } from '@/lib/calculations';
+import { formatDisplayDate, calculateGradeWiseStats, calculateAmount } from '@/lib/calculations';
 import { generateDailyReportPDF, sharePDF } from '@/lib/pdf';
 import { generateDailyReportImage, shareReportImage } from '@/lib/report-image';
 import type { DailyReportData, Vehicle, Buyer } from '@/lib/types';
@@ -15,7 +15,7 @@ import type { DailyReportData, Vehicle, Buyer } from '@/lib/types';
 export default function DashboardPage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = use(params);
   const router = useRouter();
-  const { vehicles, buyers, bagWeights, grades, fetchVehiclesForDate, fetchBagWeightsForDate, fetchBuyers, fetchGrades, getInventory, resetDay, deleteBuyer } = useStore();
+  const { vehicles, buyers, bagWeights, grades, buyerRates, fetchVehiclesForDate, fetchBagWeightsForDate, fetchBuyers, fetchGrades, fetchBuyerRatesForDate, getInventory, getBuyerRate, resetDay, deleteBuyer } = useStore();
 
   const [showVehicleModal, setShowVehicleModal] = useState(false);
   const [showBuyerModal, setShowBuyerModal] = useState(false);
@@ -36,6 +36,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
       fetchBagWeightsForDate(date),
       fetchBuyers(date),
       fetchGrades(date),
+      fetchBuyerRatesForDate(date),
     ])
       .catch(() => setFetchError('Failed to load data. Please check your connection.'))
       .finally(() => setLoading(false));
@@ -72,12 +73,19 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
     return {
       buyer,
       hasPurchases: buyerBags.length > 0,
-      grades: Object.entries(gradeGroups).map(([grade, bags]) => ({
-        grade,
-        bags,
-        ...calculateGradeWiseStats(bags),
-        color: grades.find(g => g.name === grade)?.color || '#6366f1'
-      }))
+      grades: Object.entries(gradeGroups).map(([grade, bags]) => {
+        const stats = calculateGradeWiseStats(bags);
+        const rate = getBuyerRate(buyer.id, grade, date);
+        const amount = rate ? calculateAmount(rate, stats.netWeight, stats.totalBags) : undefined;
+        return {
+          grade,
+          bags,
+          ...stats,
+          color: grades.find(g => g.name === grade)?.color || '#6366f1',
+          rate,
+          amount,
+        };
+      })
     };
   });
 
@@ -137,7 +145,9 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
               gradeTotalBags += entry.totalBags;
               gradeTotalGross += entry.grossWeight;
               gradeTotalNet += entry.netWeight;
-              report += `    ${entry.name}: Bags: ${entry.totalBags}, Gross: ${entry.grossWeight} kg, Net: ${entry.netWeight} kg\n`;
+              let line = `    ${entry.name}: Bags: ${entry.totalBags}, Gross: ${entry.grossWeight} kg, Net: ${entry.netWeight} kg`;
+              if (entry.rate) line += `, Rate: ${entry.rate}, Amt: ${entry.amount}`;
+              report += line + '\n';
             });
             report += `    TOTAL: Bags: ${gradeTotalBags}, Gross: ${gradeTotalGross} kg, Net: ${gradeTotalNet} kg\n`;
           } else {
@@ -470,7 +480,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                                   <span className="text-xs font-semibold text-red-500 bg-red-50 px-1.5 py-0.5 rounded">No Stock</span>
                                 )}
                                 <div
-                                  className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                                  className="px-1.5 py-0.5 rounded-full flex items-center justify-center text-white font-bold text-[10px] whitespace-nowrap min-w-[24px]"
                                   style={{ backgroundColor: grade.color }}
                                 >
                                   {grade.name}
@@ -515,7 +525,7 @@ export default function DashboardPage({ params }: { params: Promise<{ date: stri
                                   <span className="text-xs text-gray-500">Click to add bags</span>
                                 )}
                                 <div
-                                  className="w-6 h-6 rounded-full flex items-center justify-center text-white font-bold text-xs"
+                                  className="px-1.5 py-0.5 rounded-full flex items-center justify-center text-white font-bold text-[10px] whitespace-nowrap min-w-[24px]"
                                   style={{ backgroundColor: noStock ? '#9ca3af' : grade.color }}
                                 >
                                   {grade.name}

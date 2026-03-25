@@ -1,8 +1,8 @@
 import { create } from 'zustand';
-import { Vehicle, Buyer, BagWeight, Grade, GradeInventory } from './types';
+import { Vehicle, Buyer, BagWeight, Grade, GradeInventory, BuyerRate } from './types';
 import { formatDate } from './calculations';
 import { createClient } from './supabase/client';
-import { mapVehicle, mapBuyer, mapGrade, mapBagWeight } from './supabase/mappers';
+import { mapVehicle, mapBuyer, mapGrade, mapBagWeight, mapBuyerRate } from './supabase/mappers';
 import type { User } from '@supabase/supabase-js';
 
 interface AppState {
@@ -12,6 +12,7 @@ interface AppState {
   buyers: Buyer[];
   grades: Grade[];
   bagWeights: BagWeight[];
+  buyerRates: BuyerRate[];
   loading: boolean;
   datesWithData: Set<string>;
 
@@ -24,6 +25,7 @@ interface AppState {
   fetchBuyers: (date: string) => Promise<void>;
   fetchVehiclesForDate: (date: string) => Promise<void>;
   fetchBagWeightsForDate: (date: string) => Promise<void>;
+  fetchBuyerRatesForDate: (date: string) => Promise<void>;
   fetchDatesWithData: () => Promise<void>;
 
   // Mutations (async, Supabase-backed)
@@ -38,11 +40,13 @@ interface AppState {
   addBagWeight: (buyerId: string, grade: string, weight: number, date?: string) => Promise<void>;
   updateBagWeight: (bagId: string, weight: number, grade: string) => Promise<void>;
   deleteBagWeight: (bagId: string) => Promise<void>;
+  setBuyerRate: (buyerId: string, grade: string, date: string, rate: number) => Promise<void>;
 
   resetDay: (date: string) => Promise<void>;
 
   // Pure client-side
   getInventory: (date: string) => GradeInventory[];
+  getBuyerRate: (buyerId: string, grade: string, date: string) => number | undefined;
 }
 
 export const useStore = create<AppState>((set, get) => ({
@@ -52,6 +56,7 @@ export const useStore = create<AppState>((set, get) => ({
   buyers: [],
   grades: [],
   bagWeights: [],
+  buyerRates: [],
   loading: false,
   datesWithData: new Set<string>(),
 
@@ -65,6 +70,7 @@ export const useStore = create<AppState>((set, get) => ({
       vehicles: [],
       buyers: [],
       bagWeights: [],
+      buyerRates: [],
       datesWithData: new Set<string>(),
     });
   },
@@ -159,6 +165,22 @@ export const useStore = create<AppState>((set, get) => ({
       throw new Error('Failed to load bag weights. Please check your connection.');
     }
     set({ bagWeights: (data || []).map(mapBagWeight) });
+  },
+
+  fetchBuyerRatesForDate: async (date) => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('buyer_rates')
+      .select('*')
+      .eq('date', date);
+
+    if (error) {
+      // Table may not exist yet - silently ignore
+      console.warn('Could not fetch buyer rates (table may not exist yet):', error.message);
+      set({ buyerRates: [] });
+      return;
+    }
+    set({ buyerRates: (data || []).map(mapBuyerRate) });
   },
 
   fetchDatesWithData: async () => {
@@ -296,6 +318,22 @@ export const useStore = create<AppState>((set, get) => ({
 
   deleteBuyer: async (buyerId) => {
     const supabase = createClient();
+
+    // Delete bag_weights for this buyer first
+    const { error: bwError } = await supabase
+      .from('bag_weights')
+      .delete()
+      .eq('buyer_id', buyerId);
+
+    if (bwError) {
+      console.error('Error deleting buyer bag weights:', bwError);
+      throw bwError;
+    }
+
+    // Delete buyer_rates for this buyer
+    await supabase.from('buyer_rates').delete().eq('buyer_id', buyerId);
+
+    // Soft-delete the buyer
     const { error } = await supabase
       .from('buyers')
       .update({ is_active: false })
@@ -308,6 +346,8 @@ export const useStore = create<AppState>((set, get) => ({
 
     set((state) => ({
       buyers: state.buyers.filter((b) => b.id !== buyerId),
+      bagWeights: state.bagWeights.filter((b) => b.buyerId !== buyerId),
+      buyerRates: state.buyerRates.filter((r) => r.buyerId !== buyerId),
     }));
   },
 
@@ -462,8 +502,42 @@ export const useStore = create<AppState>((set, get) => ({
     }));
   },
 
+  setBuyerRate: async (buyerId, grade, date, rate) => {
+    const supabase = createClient();
+
+    // Upsert: insert or update on conflict
+    const { data, error } = await supabase
+      .from('buyer_rates')
+      .upsert(
+        { buyer_id: buyerId, grade, date, rate },
+        { onConflict: 'buyer_id,grade,date' }
+      )
+      .select()
+      .single();
+
+    if (error) {
+      console.warn('Could not save buyer rate (table may not exist yet):', error.message);
+      return;
+    }
+
+    set((state) => {
+      const existing = state.buyerRates.findIndex(
+        (r) => r.buyerId === buyerId && r.grade === grade && r.date === date
+      );
+      if (existing >= 0) {
+        const updated = [...state.buyerRates];
+        updated[existing] = mapBuyerRate(data);
+        return { buyerRates: updated };
+      }
+      return { buyerRates: [...state.buyerRates, mapBuyerRate(data)] };
+    });
+  },
+
   resetDay: async (date) => {
     const supabase = createClient();
+
+    // Delete buyer_rates for this date
+    await supabase.from('buyer_rates').delete().eq('date', date);
 
     // Delete bag_weights for this date first (depends on vehicles/grades)
     const { error: bwError } = await supabase
@@ -511,6 +585,7 @@ export const useStore = create<AppState>((set, get) => ({
       vehicles: state.vehicles.filter((v) => v.date !== date),
       grades: state.grades.filter((g) => g.date !== date),
       buyers: state.buyers.filter((b) => b.date !== date),
+      buyerRates: state.buyerRates.filter((r) => r.date !== date),
     }));
   },
 
@@ -522,12 +597,14 @@ export const useStore = create<AppState>((set, get) => ({
 
     state.vehicles.filter((v) => v.date === date).forEach((vehicle) => {
       Object.entries(vehicle.gradeWiseBags).forEach(([grade, count]) => {
-        totalBagsPerGrade[grade] = (totalBagsPerGrade[grade] || 0) + count;
+        totalBagsPerGrade[grade] = (totalBagsPerGrade[grade] || 0) + Number(count);
       });
     });
 
+    // Only count bags from active buyers
+    const activeBuyerIds = new Set(state.buyers.map((b) => b.id));
     const soldBagsPerGrade: Record<string, number> = {};
-    state.bagWeights.filter((b) => b.date === date).forEach((bag) => {
+    state.bagWeights.filter((b) => b.date === date && activeBuyerIds.has(b.buyerId)).forEach((bag) => {
       soldBagsPerGrade[bag.grade] = (soldBagsPerGrade[bag.grade] || 0) + 1;
     });
 
@@ -544,5 +621,13 @@ export const useStore = create<AppState>((set, get) => ({
         ),
         color: grade.color,
       }));
+  },
+
+  getBuyerRate: (buyerId, grade, date) => {
+    const state = get();
+    const found = state.buyerRates.find(
+      (r) => r.buyerId === buyerId && r.grade === grade && r.date === date
+    );
+    return found?.rate;
   },
 }));

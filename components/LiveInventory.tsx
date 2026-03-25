@@ -7,6 +7,10 @@ interface LiveInventoryProps {
 }
 
 export function LiveInventory({ date }: LiveInventoryProps) {
+  // Subscribe to vehicles, bagWeights, and grades so the component re-renders when they change
+  const vehicles = useStore(state => state.vehicles);
+  const bagWeights = useStore(state => state.bagWeights);
+  const grades = useStore(state => state.grades);
   const getInventory = useStore(state => state.getInventory);
   const inventory = getInventory(date);
 
@@ -29,8 +33,8 @@ export function LiveInventory({ date }: LiveInventoryProps) {
                 Grade {inv.grade}
               </span>
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                style={{ backgroundColor: inv.color }}
+                className="px-2.5 py-1 rounded-full flex items-center justify-center text-white font-bold text-xs whitespace-nowrap"
+                style={{ backgroundColor: inv.color, minWidth: '32px' }}
               >
                 {inv.grade}
               </div>
