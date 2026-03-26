@@ -40,7 +40,12 @@ export function calculateAmount(rate: number, netWeight: number, totalBags: numb
   const baseAmount = rate * netWeight;
   const commission = baseAmount * 0.01;
   const bagCharges = 10 * totalBags;
-  return Math.round((baseAmount + commission + bagCharges) * 100) / 100;
+  return Math.round(baseAmount + commission + bagCharges);
+}
+
+// Format amount for display (uses Rs. for PDF compatibility, no decimals)
+export function formatAmount(amount: number): string {
+  return `Rs.${amount.toLocaleString('en-IN')}`;
 }
 
 export function formatDate(date: Date): string {

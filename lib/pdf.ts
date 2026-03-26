@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import type { DailyReportData, BuyerSummaryData } from './types';
-import { formatDisplayDate } from './calculations';
+import { formatDisplayDate, formatAmount } from './calculations';
 
 const BRAND_COLOR: [number, number, number] = [79, 70, 229]; // indigo-500
 
@@ -11,35 +11,47 @@ function hexToRgb(hex: string): [number, number, number] | null {
   return [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)];
 }
 
+function getPageHeight(doc: jsPDF): number {
+  return doc.internal.pageSize.getHeight();
+}
+
+// Check if we need a new page; if so, add one and return the new Y position
+function ensureSpace(doc: jsPDF, y: number, needed: number, marginBottom = 20): number {
+  if (y + needed > getPageHeight(doc) - marginBottom) {
+    doc.addPage();
+    return 20; // top margin on new page
+  }
+  return y;
+}
+
 function addHeader(doc: jsPDF, title: string, subtitle: string, printFriendly = false) {
   const pageWidth = doc.internal.pageSize.getWidth();
 
   if (printFriendly) {
-    // Thin colored top line + colored text on white background
     doc.setFillColor(...BRAND_COLOR);
     doc.rect(0, 0, pageWidth, 3, 'F');
 
     doc.setTextColor(...BRAND_COLOR);
-    doc.setFontSize(16);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(title, 14, 16);
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(80, 80, 80);
+    doc.text(subtitle, 14, 24);
+  } else {
+    doc.setFillColor(...BRAND_COLOR);
+    doc.rect(0, 0, pageWidth, 30, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
     doc.text(title, 14, 14);
 
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    doc.setTextColor(80, 80, 80);
     doc.text(subtitle, 14, 22);
-  } else {
-    doc.setFillColor(...BRAND_COLOR);
-    doc.rect(0, 0, pageWidth, 28, 'F');
-
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
-    doc.setFont('helvetica', 'bold');
-    doc.text(title, 14, 12);
-
-    doc.setFontSize(10);
-    doc.setFont('helvetica', 'normal');
-    doc.text(subtitle, 14, 20);
   }
 
   doc.setTextColor(0, 0, 0);
@@ -49,11 +61,11 @@ function addFooter(doc: jsPDF) {
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
-    doc.setFontSize(8);
+    doc.setFontSize(9);
     doc.setTextColor(150, 150, 150);
-    const pageHeight = doc.internal.pageSize.getHeight();
+    const pageHeight = getPageHeight(doc);
     doc.text('Generated with Ginger Trading System', 14, pageHeight - 10);
-    doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.getWidth() - 40, pageHeight - 10);
+    doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.getWidth() - 42, pageHeight - 10);
   }
 }
 
@@ -74,14 +86,14 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
 
   addHeader(doc, 'DAILY CONSOLIDATED REPORT', `Date: ${formatDisplayDate(data.date)}`, printFriendly);
 
-  let y = 36;
+  let y = 38;
 
   // Vehicles table
-  doc.setFontSize(12);
+  doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0, 0, 0);
   doc.text(`Vehicles (${data.vehicles.length})`, 14, y);
-  y += 4;
+  y += 5;
 
   if (data.vehicles.length > 0) {
     const vehicleRows = data.vehicles.flatMap((v) =>
@@ -96,24 +108,27 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
       startY: y,
       head: [['Vehicle', 'Grade', 'Bags']],
       body: vehicleRows,
-      headStyles: getTableHeadStyles(printFriendly),
+      headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 11 },
+      bodyStyles: { fontSize: 11 },
       margin: { left: 14, right: 14 },
+      rowPageBreak: 'avoid',
     });
 
-    y = (doc as any).lastAutoTable.finalY + 10;
+    y = (doc as any).lastAutoTable.finalY + 12;
   } else {
     y += 6;
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
     doc.text('No vehicles added', 14, y);
-    y += 10;
+    y += 12;
   }
 
-  // Buyers summary — Vehicle -> Grade -> Buyers
-  doc.setFontSize(12);
+  // Buyers summary
+  y = ensureSpace(doc, y, 30);
+  doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('Buyers Summary', 14, y);
-  y += 6;
+  y += 7;
 
   if (data.vehicles.length > 0 && data.buyerSummaries.length > 0) {
     let overallTotalBags = 0;
@@ -128,11 +143,13 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
     });
 
     data.vehicles.forEach((vehicle) => {
-      doc.setFontSize(11);
+      // Ensure vehicle heading + at least one grade table fits
+      y = ensureSpace(doc, y, 50);
+      doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(0, 0, 0);
       doc.text(`Vehicle: ${vehicle.vehicleNumber}`, 14, y);
-      y += 5;
+      y += 6;
 
       const sortedGrades = Object.entries(vehicle.gradeWiseBags).sort(([a], [b]) => a.localeCompare(b));
 
@@ -142,17 +159,19 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
             const gd = bs.grades.find((g) => g.grade === grade);
             if (!gd) return null;
             const rateStr = gd.rate != null ? String(gd.rate) : '';
-            const amtStr = gd.amount != null ? `₹${gd.amount.toLocaleString('en-IN')}` : '';
+            const amtStr = gd.amount != null ? formatAmount(gd.amount) : '';
             return [bs.buyer.name, String(gd.totalBags), `${gd.grossWeight} kg`, `${gd.netWeight} kg`, rateStr, amtStr];
           })
           .filter((row): row is string[] => row !== null);
 
-        doc.setFontSize(9);
+        // Ensure grade heading + table fits on page
+        y = ensureSpace(doc, y, 40);
+        doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(194, 65, 12);
         doc.text(`Grade ${grade} (${vehicleBagCount} bags from this vehicle)`, 20, y);
         doc.setTextColor(0, 0, 0);
-        y += 3;
+        y += 4;
 
         if (buyersForGrade.length > 0) {
           let gradeTotalBags = 0;
@@ -163,18 +182,19 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
             gradeTotalBags += parseInt(row[1]);
             gradeTotalGross += parseInt(row[2]);
             gradeTotalNet += parseInt(row[3]);
-            if (row[5]) gradeTotalAmt += parseFloat(row[5].replace(/[₹,]/g, '')) || 0;
+            if (row[5]) gradeTotalAmt += parseFloat(row[5].replace(/[Rs.,]/g, '')) || 0;
           });
-          const totalAmtStr = gradeTotalAmt > 0 ? `₹${gradeTotalAmt.toLocaleString('en-IN')}` : '';
+          const totalAmtStr = gradeTotalAmt > 0 ? formatAmount(gradeTotalAmt) : '';
           const bodyRows = [...buyersForGrade, ['TOTAL', String(gradeTotalBags), `${gradeTotalGross} kg`, `${gradeTotalNet} kg`, '', totalAmtStr]];
 
           autoTable(doc, {
             startY: y,
             head: [['Buyer', 'Bags', 'Gross', 'Net', 'Rate', 'Amount']],
             body: bodyRows,
-            headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 8 },
-            bodyStyles: { fontSize: 8 },
+            headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 10 },
+            bodyStyles: { fontSize: 10 },
             margin: { left: 20, right: 14 },
+            rowPageBreak: 'avoid',
             didParseCell: (hookData) => {
               if (hookData.section === 'body' && hookData.row.index === bodyRows.length - 1) {
                 hookData.cell.styles.fontStyle = 'bold';
@@ -182,37 +202,39 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
             },
           });
 
-          y = (doc as any).lastAutoTable.finalY + 6;
+          y = (doc as any).lastAutoTable.finalY + 8;
         } else {
-          doc.setFontSize(8);
+          doc.setFontSize(10);
           doc.setFont('helvetica', 'normal');
           doc.text('No buyers for this grade', 24, y);
-          y += 6;
+          y += 8;
         }
       });
 
-      y += 2;
+      y += 3;
     });
 
     // Overall totals
-    doc.setFontSize(10);
+    y = ensureSpace(doc, y, 20);
+    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 0, 0);
     doc.text(`TOTALS: Bags: ${overallTotalBags} | Gross: ${overallTotalGross} kg | Net: ${overallTotalNet} kg`, 14, y);
-    y += 10;
+    y += 12;
   } else {
     y += 6;
-    doc.setFontSize(10);
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
     doc.text('No buyer data', 14, y);
-    y += 10;
+    y += 12;
   }
 
   // Inventory table
-  doc.setFontSize(12);
+  y = ensureSpace(doc, y, 40);
+  doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('Inventory Summary', 14, y);
-  y += 4;
+  y += 5;
 
   if (data.inventory.length > 0) {
     const inventoryRows = data.inventory.map((inv) => [
@@ -226,8 +248,10 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
       startY: y,
       head: [['Grade', 'Total', 'Sold', 'Pending']],
       body: inventoryRows,
-      headStyles: getTableHeadStyles(printFriendly),
+      headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 11 },
+      bodyStyles: { fontSize: 11 },
       margin: { left: 14, right: 14 },
+      rowPageBreak: 'avoid',
     });
   }
 
@@ -252,31 +276,36 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
   // Adaptive sizing based on total bag count
   const totalBags = data.grades.reduce((sum, g) => sum + g.bags.length, 0);
   const isCompact = totalBags > 100;
-  const pillW = isCompact ? 11 : 14;
-  const pillH = isCompact ? 10 : 14;
+  const pillW = isCompact ? 12 : 15;
+  const pillH = isCompact ? 11 : 15;
   const pillGap = isCompact ? 2 : 3;
-  const pillFontSize = isCompact ? 6.5 : 8;
+  const pillFontSize = isCompact ? 7 : 9;
   const cellW = pillW + pillGap;
   const cellH = pillH + pillGap;
   const pillsPerRow = Math.floor(usableWidth / cellW);
 
-  let y = 36;
+  let y = 38;
 
   if (data.grades.length === 0) {
-    doc.setFontSize(12);
+    doc.setFontSize(13);
     doc.text('No bags entered yet', marginLeft, y);
   } else {
     for (const gradeStat of data.grades) {
       const gradeColor = hexToRgb(gradeStat.color) || BRAND_COLOR;
 
+      // Calculate how much space this grade section needs
+      const totalPillRows = Math.ceil(gradeStat.bags.length / pillsPerRow) || 1;
+      const gradeNeeded = 8 + totalPillRows * cellH + 15; // heading + pills + summary line
+      y = ensureSpace(doc, y, gradeNeeded);
+
       // Grade heading with colored bullet
       doc.setFillColor(...gradeColor);
-      doc.circle(marginLeft + 2, y - 1.5, 1.5, 'F');
-      doc.setFontSize(10);
+      doc.circle(marginLeft + 2, y - 1.5, 2, 'F');
+      doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor(...gradeColor);
-      doc.text(`Grade ${gradeStat.grade}`, marginLeft + 6, y);
-      y += 5;
+      doc.text(`Grade ${gradeStat.grade}`, marginLeft + 7, y);
+      y += 6;
 
       // Draw bag weight pills in a grid
       doc.setFontSize(pillFontSize);
@@ -288,14 +317,18 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
         const x = marginLeft + col * cellW;
         const cellY = y + row * cellH;
 
+        // Check if this row of pills would go off page
+        if (cellY + pillH > getPageHeight(doc) - 20) {
+          // This shouldn't happen if ensureSpace was accurate, but safety check
+          return;
+        }
+
         if (printFriendly) {
-          // Outlined rectangle with colored text
           doc.setDrawColor(...gradeColor);
           doc.setLineWidth(0.5);
           doc.roundedRect(x, cellY, pillW, pillH, 2, 2, 'S');
           doc.setTextColor(...gradeColor);
         } else {
-          // Filled rounded rectangle with white text
           doc.setFillColor(...gradeColor);
           doc.roundedRect(x, cellY, pillW, pillH, 2, 2, 'F');
           doc.setTextColor(255, 255, 255);
@@ -309,11 +342,10 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
       });
 
       // Move past the pills grid
-      const totalRows = Math.ceil(gradeStat.bags.length / pillsPerRow) || 1;
-      y += totalRows * cellH + 2;
+      y += totalPillRows * cellH + 3;
 
       // Grade summary line
-      doc.setFontSize(8);
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(80, 80, 80);
       let summaryLine = `Bags: ${gradeStat.totalBags}  |  Gross: ${gradeStat.grossWeight} kg  |  Net: ${gradeStat.netWeight} kg`;
@@ -321,24 +353,25 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
         summaryLine += `  |  Rate: ${gradeStat.rate}`;
       }
       if (gradeStat.amount != null) {
-        summaryLine += `  |  Amt: ₹${gradeStat.amount.toLocaleString('en-IN')}`;
+        summaryLine += `  |  Amt: ${formatAmount(gradeStat.amount)}`;
       }
       doc.text(summaryLine, marginLeft, y);
-      y += 8;
+      y += 10;
     }
 
     // Overall Summary divider
+    y = ensureSpace(doc, y, 50);
     doc.setDrawColor(180, 180, 180);
     doc.setLineWidth(0.3);
     doc.line(marginLeft + 20, y - 2, pageWidth - marginRight - 20, y - 2);
 
-    doc.setFontSize(10);
+    doc.setFontSize(12);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(0, 0, 0);
     const summaryTitle = 'OVERALL SUMMARY';
     const titleWidth = doc.getTextWidth(summaryTitle);
-    doc.text(summaryTitle, (pageWidth - titleWidth) / 2, y + 2);
-    y += 8;
+    doc.text(summaryTitle, (pageWidth - titleWidth) / 2, y + 3);
+    y += 10;
 
     // Summary table
     const hasAnyRate = data.grades.some((g) => g.rate != null);
@@ -351,7 +384,7 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
       ];
       if (hasAnyRate) {
         row.push(g.rate != null ? String(g.rate) : '');
-        row.push(g.amount != null ? `₹${g.amount.toLocaleString('en-IN')}` : '');
+        row.push(g.amount != null ? formatAmount(g.amount) : '');
       }
       return row;
     });
@@ -363,7 +396,7 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
     const totalRow = ['TOTAL', String(totalBagsCount), `${totalGross} kg`, `${totalNet} kg`];
     if (hasAnyRate) {
       totalRow.push('');
-      totalRow.push(totalAmt > 0 ? `₹${totalAmt.toLocaleString('en-IN')}` : '');
+      totalRow.push(totalAmt > 0 ? formatAmount(totalAmt) : '');
     }
     summaryRows.push(totalRow);
 
@@ -376,9 +409,10 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
       startY: y,
       head: [summaryHead],
       body: summaryRows,
-      headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 8 },
-      bodyStyles: { fontSize: 8 },
+      headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 10 },
+      bodyStyles: { fontSize: 10 },
       margin: { left: marginLeft, right: marginRight },
+      rowPageBreak: 'avoid',
       didParseCell: (hookData) => {
         if (hookData.section === 'body' && hookData.row.index === summaryRows.length - 1) {
           hookData.cell.styles.fontStyle = 'bold';
