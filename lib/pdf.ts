@@ -3,7 +3,7 @@ import autoTable from 'jspdf-autotable';
 import type { DailyReportData, BuyerSummaryData } from './types';
 import { formatDisplayDate, formatAmount } from './calculations';
 
-const BRAND_COLOR: [number, number, number] = [79, 70, 229]; // indigo-500
+const BRAND_COLOR: [number, number, number] = [0, 0, 0]; // black for print
 
 function hexToRgb(hex: string): [number, number, number] | null {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
@@ -37,8 +37,8 @@ function addHeader(doc: jsPDF, title: string, subtitle: string, printFriendly = 
     doc.text(title, 14, 16);
 
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(80, 80, 80);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(0, 0, 0);
     doc.text(subtitle, 14, 24);
   } else {
     doc.setFillColor(...BRAND_COLOR);
@@ -62,7 +62,7 @@ function addFooter(doc: jsPDF) {
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(9);
-    doc.setTextColor(150, 150, 150);
+    doc.setTextColor(50, 50, 50);
     const pageHeight = getPageHeight(doc);
     doc.text('Generated with Ginger Trading System', 14, pageHeight - 10);
     doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.getWidth() - 42, pageHeight - 10);
@@ -168,9 +168,8 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
         y = ensureSpace(doc, y, 40);
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor(194, 65, 12);
-        doc.text(`Grade ${grade} (${vehicleBagCount} bags from this vehicle)`, 20, y);
         doc.setTextColor(0, 0, 0);
+        doc.text(`Grade ${grade} (${vehicleBagCount} bags from this vehicle)`, 20, y);
         y += 4;
 
         if (buyersForGrade.length > 0) {
@@ -346,8 +345,8 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
 
       // Grade summary line
       doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(80, 80, 80);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
       let summaryLine = `Bags: ${gradeStat.totalBags}  |  Gross: ${gradeStat.grossWeight} kg  |  Net: ${gradeStat.netWeight} kg`;
       if (gradeStat.rate != null) {
         summaryLine += `  |  Rate: ${gradeStat.rate}`;
@@ -361,8 +360,8 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
 
     // Overall Summary divider
     y = ensureSpace(doc, y, 50);
-    doc.setDrawColor(180, 180, 180);
-    doc.setLineWidth(0.3);
+    doc.setDrawColor(0, 0, 0);
+    doc.setLineWidth(0.5);
     doc.line(marginLeft + 20, y - 2, pageWidth - marginRight - 20, y - 2);
 
     doc.setFontSize(12);
