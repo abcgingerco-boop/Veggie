@@ -50,7 +50,7 @@ function addHeader(doc: jsPDF, title: string, subtitle: string, printFriendly = 
     doc.text(title, 14, 14);
 
     doc.setFontSize(11);
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('helvetica', 'bold');
     doc.text(subtitle, 14, 22);
   }
 
@@ -62,7 +62,7 @@ function addFooter(doc: jsPDF) {
   for (let i = 1; i <= pageCount; i++) {
     doc.setPage(i);
     doc.setFontSize(9);
-    doc.setTextColor(50, 50, 50);
+    doc.setTextColor(0, 0, 0);
     const pageHeight = getPageHeight(doc);
     doc.text('Generated with Ginger Trading System', 14, pageHeight - 10);
     doc.text(`Page ${i} of ${pageCount}`, doc.internal.pageSize.getWidth() - 42, pageHeight - 10);
@@ -109,7 +109,7 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
       head: [['Vehicle', 'Grade', 'Bags']],
       body: vehicleRows,
       headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 11 },
-      bodyStyles: { fontSize: 11 },
+      bodyStyles: { fontSize: 11, textColor: [0, 0, 0] as [number, number, number], fontStyle: 'bold' },
       margin: { left: 14, right: 14 },
       rowPageBreak: 'avoid',
     });
@@ -191,7 +191,7 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
             head: [['Buyer', 'Bags', 'Gross', 'Net', 'Rate', 'Amount']],
             body: bodyRows,
             headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 10 },
-            bodyStyles: { fontSize: 10 },
+            bodyStyles: { fontSize: 10, textColor: [0, 0, 0] as [number, number, number], fontStyle: 'bold' },
             margin: { left: 20, right: 14 },
             rowPageBreak: 'avoid',
             didParseCell: (hookData) => {
@@ -248,7 +248,7 @@ export function generateDailyReportPDF(data: DailyReportData, printFriendly = fa
       head: [['Grade', 'Total', 'Sold', 'Pending']],
       body: inventoryRows,
       headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 11 },
-      bodyStyles: { fontSize: 11 },
+      bodyStyles: { fontSize: 11, textColor: [0, 0, 0] as [number, number, number], fontStyle: 'bold' },
       margin: { left: 14, right: 14 },
       rowPageBreak: 'avoid',
     });
@@ -297,12 +297,12 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
       const gradeNeeded = 8 + totalPillRows * cellH + 15; // heading + pills + summary line
       y = ensureSpace(doc, y, gradeNeeded);
 
-      // Grade heading with colored bullet
-      doc.setFillColor(...gradeColor);
+      // Grade heading with black bullet
+      doc.setFillColor(0, 0, 0);
       doc.circle(marginLeft + 2, y - 1.5, 2, 'F');
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...gradeColor);
+      doc.setTextColor(0, 0, 0);
       doc.text(`Grade ${gradeStat.grade}`, marginLeft + 7, y);
       y += 6;
 
@@ -318,17 +318,16 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
 
         // Check if this row of pills would go off page
         if (cellY + pillH > getPageHeight(doc) - 20) {
-          // This shouldn't happen if ensureSpace was accurate, but safety check
           return;
         }
 
         if (printFriendly) {
-          doc.setDrawColor(...gradeColor);
+          doc.setDrawColor(0, 0, 0);
           doc.setLineWidth(0.5);
           doc.roundedRect(x, cellY, pillW, pillH, 2, 2, 'S');
-          doc.setTextColor(...gradeColor);
+          doc.setTextColor(0, 0, 0);
         } else {
-          doc.setFillColor(...gradeColor);
+          doc.setFillColor(0, 0, 0);
           doc.roundedRect(x, cellY, pillW, pillH, 2, 2, 'F');
           doc.setTextColor(255, 255, 255);
         }
@@ -409,7 +408,7 @@ export function generateBuyerSummaryPDF(data: BuyerSummaryData, printFriendly = 
       head: [summaryHead],
       body: summaryRows,
       headStyles: { ...getTableHeadStyles(printFriendly), fontSize: 10 },
-      bodyStyles: { fontSize: 10 },
+      bodyStyles: { fontSize: 10, textColor: [0, 0, 0] as [number, number, number], fontStyle: 'bold' },
       margin: { left: marginLeft, right: marginRight },
       rowPageBreak: 'avoid',
       didParseCell: (hookData) => {

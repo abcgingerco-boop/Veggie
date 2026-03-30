@@ -182,7 +182,7 @@ function buildReportHTML(data: DailyReportData): string {
       </div>
 
       <!-- Footer -->
-      <div style="text-align:center;font-size:12px;color:#333;margin-top:16px;padding-top:12px;border-top:2px solid #000;">
+      <div style="text-align:center;font-size:12px;color:#000;margin-top:16px;padding-top:12px;border-top:2px solid #000;">
         Generated with Ginger Trading System
       </div>
     </div>
@@ -338,7 +338,7 @@ function buildBuyerReportHTML(data: BuyerSummaryData): string {
       </div>
 
       <!-- Footer -->
-      <div style="text-align:center;font-size:12px;color:#333;margin-top:16px;padding-top:12px;border-top:2px solid #000;">
+      <div style="text-align:center;font-size:12px;color:#000;margin-top:16px;padding-top:12px;border-top:2px solid #000;">
         Generated with Ginger Trading System
       </div>
     </div>
