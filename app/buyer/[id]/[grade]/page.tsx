@@ -219,6 +219,7 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
   };
 
   const WEIGHT_OPTIONS = [50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65];
+  const [customWeight, setCustomWeight] = useState('');
 
   const WEIGHT_COLOR_MAP: Record<number, string> = {
     50: '#ef4444', // Red
@@ -386,6 +387,47 @@ export default function BuyerDetailPage({ params }: { params: Promise<{ id: stri
                 {weight}
               </button>
             ))}
+          </div>
+
+          {/* Custom Weight Input */}
+          <div className="mt-3 flex items-center gap-2">
+            <input
+              type="text"
+              inputMode="decimal"
+              pattern="[0-9]*\.?[0-9]*"
+              value={customWeight}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === '' || /^\d*\.?\d*$/.test(v)) {
+                  setCustomWeight(v);
+                }
+              }}
+              placeholder="Custom wt (kg)"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-base font-semibold text-gray-800 outline-none focus:ring-2 focus:ring-indigo-400"
+              disabled={submitting || isOutOfStock || !isOnline}
+            />
+            <button
+              disabled={submitting || isOutOfStock || !isOnline || !customWeight}
+              onClick={async () => {
+                const val = parseFloat(customWeight);
+                if (isNaN(val) || val <= 0) {
+                  alert('Enter a valid weight');
+                  return;
+                }
+                setSubmitting(true);
+                try {
+                  await addBagWeight(buyerId, grade, val, date);
+                  setCustomWeight('');
+                } catch (err) {
+                  alert(err instanceof Error ? err.message : 'Failed to add bag. Please try again.');
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-500 text-white font-bold rounded-lg hover:from-indigo-600 hover:to-purple-600 transition transform hover:scale-105 shadow-md disabled:opacity-50 disabled:transform-none text-sm"
+            >
+              + Add
+            </button>
           </div>
         </div>
 
